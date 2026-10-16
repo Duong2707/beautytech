@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
-import { storage } from './storage';
+import { storage } from '../local/storage';
 
 const BASE_URL =
   Platform.OS === 'web'

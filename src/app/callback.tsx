@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
+import { useAuth } from '../presentation/contexts/AuthContext';
+import api from '../data/datasources/remote/api';
 
 export default function CallbackScreen() {
   const router = useRouter();

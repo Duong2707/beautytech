@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { authService } from '../services/authService';
-import { storage } from '../services/storage';
+import { authService } from '../../data/datasources/remote/authService';
+import { storage } from '../../data/datasources/local/storage';
 
 type User = {
   _id: string;

@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { storage } from '../services/storage';
-import { authService } from '../services/authService';
+import { storage } from '../data/datasources/local/storage';
+import { authService } from '../data/datasources/remote/authService';
 
 export default function UpdatePasswordScreen() {
   const router = useRouter();

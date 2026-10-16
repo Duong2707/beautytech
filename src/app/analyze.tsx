@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { skinService, SkinAnalysisResult } from '../services/skinService';
+import { skinService, SkinAnalysisResult } from '../data/datasources/remote/skinService';
 
 export default function AnalyzeScreen() {
   const router = useRouter();

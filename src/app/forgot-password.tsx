@@ -14,8 +14,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { authService } from '../services/authService';
-import { storage } from '../services/storage';
+import { authService } from '../data/datasources/remote/authService';
+import { storage } from '../data/datasources/local/storage';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();

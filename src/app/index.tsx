@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRouter } from 'expo-router';
-import SplashScreen from '../components/SplashScreen';
+import SplashScreen from '../presentation/components/SplashScreen';
 
 export default function Index() {
   const router = useRouter();

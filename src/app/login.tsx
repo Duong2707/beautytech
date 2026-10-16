@@ -17,14 +17,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../presentation/contexts/AuthContext';
+import { auth, googleProvider } from '../data/datasources/remote/firebase';
+import api from '../data/datasources/remote/api';
 
 // Firebase (chỉ dùng cho Google)
 import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../services/firebase';
 
-// Services
-import api from '../services/api';
+
+
 
 const WEB_LOGIN_URL = 'https://enchanting-fox-9000a8.netlify.app';
 

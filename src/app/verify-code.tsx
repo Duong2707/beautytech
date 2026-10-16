@@ -14,9 +14,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { authService } from '../services/authService';
-import { storage } from '../services/storage';
-
+import { authService } from '../data/datasources/remote/authService';
+import { storage } from '../data/datasources/local/storage';
 const CODE_LENGTH = 4;
 
 export default function VerifyCodeScreen() {

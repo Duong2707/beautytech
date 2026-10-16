@@ -38,7 +38,7 @@ export default function SplashScreen({ onPress }: Props) {
   return (
     <Pressable style={styles.container} onPress={onPress}>
       <Animated.Image
-        source={require('../../assets/logo.png')}
+        source={require('../../../assets/logo.png')}
         style={[
           styles.logo,
           { opacity, transform: [{ scale }] },
