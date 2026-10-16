@@ -1,15 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { authService } from '../../data/datasources/remote/authService';
+import { User } from '../../domain/entities/User';
+import { AuthRepositoryImpl } from '../../data/repositories/AuthRepositoryImpl';
+import { LoginUseCase } from '../../domain/usecases/auth/LoginUseCase';
+import { RegisterUseCase } from '../../domain/usecases/auth/RegisterUseCase';
+import { LogoutUseCase } from '../../domain/usecases/auth/LogoutUseCase';
 import { storage } from '../../data/datasources/local/storage';
-
-type User = {
-  _id: string;
-  email: string;
-  fullName: string;
-  phone: string;
-  role: string;
-  avatar?: string;
-};
 
 type AuthContextType = {
   user: User | null;
@@ -22,11 +17,18 @@ type AuthContextType = {
     fullName: string,
     phone: string
   ) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   setAuthData: (user: User, token: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Khởi tạo dependency
+const authRepo = new AuthRepositoryImpl();
+const loginUseCase = new LoginUseCase(authRepo);
+const registerUseCase = new RegisterUseCase(authRepo);
+const logoutUseCase = new LogoutUseCase(authRepo);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -36,12 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadToken = async () => {
       try {
-        const savedToken = await storage.getItem('token');
-        const savedUser = await storage.getItem('user');
+        const savedToken = await authRepo.getToken();
+        const savedUser = await authRepo.getCurrentUser();
 
         if (savedToken && savedUser) {
           setToken(savedToken);
-          setUser(JSON.parse(savedUser));
+          setUser(savedUser);
         }
       } catch (e) {
         console.log('Load token error:', e);
@@ -54,14 +56,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const response = await authService.login({ email, password });
-    const { token: newToken, ...userData } = response.data;
-
-    await storage.setItem('token', newToken);
-    await storage.setItem('user', JSON.stringify(userData));
-
-    setToken(newToken);
-    setUser(userData);
+    const result = await loginUseCase.execute(email, password);
+    await storage.setItem('token', result.token);
+    await storage.setItem('user', JSON.stringify(result.user));
+    setToken(result.token);
+    setUser(result.user);
   };
 
   const register = async (
@@ -70,29 +69,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fullName: string,
     phone: string
   ) => {
-    const response = await authService.register({
-      email,
-      password,
-      fullName,
-      phone,
-    });
-    const { token: newToken, ...userData } = response.data;
+    const result = await registerUseCase.execute(email, password, fullName, phone);
+    await storage.setItem('token', result.token);
+    await storage.setItem('user', JSON.stringify(result.user));
+    setToken(result.token);
+    setUser(result.user);
+  };
 
-    await storage.setItem('token', newToken);
-    await storage.setItem('user', JSON.stringify(userData));
-
-    setToken(newToken);
-    setUser(userData);
+  const loginWithGoogle = async (idToken: string) => {
+    const result = await authRepo.loginWithGoogle(idToken);
+    await storage.setItem('token', result.token);
+    await storage.setItem('user', JSON.stringify(result.user));
+    setToken(result.token);
+    setUser(result.user);
   };
 
   const logout = async () => {
-    await storage.removeItem('token');
-    await storage.removeItem('user');
+    await logoutUseCase.execute();
     setToken(null);
     setUser(null);
   };
 
-  // Method mới — dùng cho Google login
   const setAuthData = async (newUser: User, newToken: string) => {
     await storage.setItem('token', newToken);
     await storage.setItem('user', JSON.stringify(newUser));
@@ -102,7 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, isLoading, login, register, logout, setAuthData }}
+      value={{
+        user,
+        token,
+        isLoading,
+        login,
+        register,
+        loginWithGoogle,
+        logout,
+        setAuthData,
+      }}
     >
       {children}
     </AuthContext.Provider>
