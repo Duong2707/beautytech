@@ -7,6 +7,9 @@ export type Product = {
   image: string;
   category: string;
   description?: string;
+  ingredients?: string[];
   skinTypes?: string[];
+  concerns?: string[];
   rating?: number;
+  sold?: number;
 };

@@ -54,6 +54,14 @@ export default function HomeScreen() {
           <Text style={styles.btnText}>📸 Phân tích da bằng AI</Text>
         </Pressable>
 
+        {/* Nút xem sản phẩm */}
+        <Pressable
+          style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
+          onPress={() => router.push('/products')}
+        >
+          <Text style={styles.btnText}>🛍️ Xem sản phẩm</Text>
+        </Pressable>
+
         {/* Nút đăng xuất */}
         <Pressable
           style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}

@@ -2,10 +2,12 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { storage } from '../local/storage';
 
-const BASE_URL =
-  Platform.OS === 'web'
-    ? 'http://localhost:5000'
-    : 'http://192.168.40.37:5000';
+const BASE_URL = Platform.select({
+  web: 'http://localhost:5000',
+  android: 'http://10.0.2.2:5000',
+  ios: 'http://localhost:5000',
+  default: 'http://10.0.2.2:5000',
+});
 
 const api = axios.create({
   baseURL: BASE_URL,
