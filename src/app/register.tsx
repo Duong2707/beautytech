@@ -10,20 +10,50 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const { register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [repeatPassword, setRepeatPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showRepeatPassword, setShowRepeatPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
-    console.log('Register:', { email, password, repeatPassword });
+  const handleRegister = async () => {
+    if (!email || !password || !repeatPassword) {
+      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ thông tin');
+      return;
+    }
+
+    if (password !== repeatPassword) {
+      Alert.alert('Lỗi', 'Password nhập lại không khớp');
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('Lỗi', 'Password phải có ít nhất 6 ký tự');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await register(email, password, '', '');
+      router.replace('/home');
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || 'Đăng ký thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -124,37 +154,17 @@ export default function RegisterScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.registerBtn,
-              pressed && { opacity: 0.85 },
+              (pressed || loading) && { opacity: 0.7 },
             ]}
             onPress={handleRegister}
+            disabled={loading}
           >
-            <Text style={styles.registerBtnText}>REGISTER</Text>
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.registerBtnText}>REGISTER</Text>
+            )}
           </Pressable>
-
-          {/* Or divider */}
-          <View style={styles.orRow}>
-            <View style={styles.orLine} />
-            <Text style={styles.orText}>Or register with:</Text>
-            <View style={styles.orLine} />
-          </View>
-
-          {/* Social buttons */}
-          <View style={styles.socialRow}>
-            <Pressable style={styles.socialBtn}>
-              <Image
-                source={require('../../assets/icon-google.png')}
-                style={styles.socialIcon}
-                resizeMode="contain"
-              />
-            </Pressable>
-            <Pressable style={styles.socialBtn}>
-              <Image
-                source={require('../../assets/icon-facebook.png')}
-                style={styles.socialIcon}
-                resizeMode="contain"
-              />
-            </Pressable>
-          </View>
 
           {/* Back to login */}
           <Pressable

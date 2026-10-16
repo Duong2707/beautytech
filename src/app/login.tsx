@@ -10,18 +10,125 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { useAuth } from '../context/AuthContext';
+
+// Firebase (chỉ dùng cho Google)
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../services/firebase';
+
+// Services
+import api from '../services/api';
+
+const WEB_LOGIN_URL = 'https://enchanting-fox-9000a8.netlify.app';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { login, setAuthData } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
 
-  const handleLogin = () => {
-    console.log('Login:', { email, password });
+  // Xử lý idToken từ Firebase (Google)
+  const handleFirebaseToken = async (idToken: string) => {
+    try {
+      const response = await api.post('/api/auth/firebase-login', { idToken });
+      const { token, ...userData } = response.data.data;
+
+      await setAuthData(userData, token);
+      router.replace('/home');
+    } catch (error: any) {
+      console.error('❌ Firebase login error:', error);
+      const message =
+        error?.response?.data?.message || 'Đăng nhập thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  // Đăng nhập email/password
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email và password');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await login(email, password);
+      router.replace('/home');
+    } catch (error: any) {
+      const message =
+        error?.response?.data?.message || 'Đăng nhập thất bại';
+      Alert.alert('Lỗi', message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Đăng nhập Google
+  const handleGoogleLogin = async () => {
+    // Trên WEB: dùng popup Firebase
+    if (Platform.OS === 'web') {
+      setSocialLoading(true);
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        const idToken = await result.user.getIdToken();
+        await handleFirebaseToken(idToken);
+      } catch (error: any) {
+        console.error('❌ Web Google login error:', error);
+        Alert.alert('Lỗi', error.message || 'Đăng nhập Google thất bại');
+        setSocialLoading(false);
+      }
+      return;
+    }
+
+    // Trên MOBILE: mở web trung gian
+    setSocialLoading(true);
+    const redirectUrl = Linking.createURL('callback');
+    const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
+
+    try {
+      await WebBrowser.openBrowserAsync(authUrl);
+    } catch (error) {
+      console.error('❌ Open browser error:', error);
+      Alert.alert('Lỗi', 'Không mở được trình duyệt');
+      setSocialLoading(false);
+    }
+  };
+
+  // Đăng nhập Facebook
+  const handleFacebookLogin = async () => {
+    // Trên WEB: redirect đến web trung gian
+    if (Platform.OS === 'web') {
+      setSocialLoading(true);
+      const redirectUrl = `${window.location.origin}/callback`;
+      const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
+      window.location.href = authUrl;
+      return;
+    }
+
+    // Trên MOBILE: mở browser
+    setSocialLoading(true);
+    const redirectUrl = Linking.createURL('callback');
+    const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
+
+    try {
+      await WebBrowser.openBrowserAsync(authUrl);
+    } catch (error) {
+      console.error('❌ Open browser error:', error);
+      Alert.alert('Lỗi', 'Không mở được trình duyệt');
+      setSocialLoading(false);
+    }
   };
 
   return (
@@ -43,7 +150,6 @@ export default function LoginScreen() {
 
           <Text style={styles.title}>Beauty Tech</Text>
 
-          {/* Email */}
           <View style={styles.inputWrapper}>
             <View style={styles.labelBox}>
               <Text style={styles.label}>Gamail</Text>
@@ -60,7 +166,6 @@ export default function LoginScreen() {
             />
           </View>
 
-          {/* Password */}
           <View style={[styles.inputWrapper, { marginTop: 18 }]}>
             <View style={styles.labelBox}>
               <Text style={styles.label}>Password</Text>
@@ -89,7 +194,6 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          {/* Forgot password */}
           <Pressable
             style={styles.forgotWrap}
             onPress={() => router.push('/forgot-password')}
@@ -97,43 +201,63 @@ export default function LoginScreen() {
             <Text style={styles.forgotText}>Forgot Password</Text>
           </Pressable>
 
-          {/* Login button */}
           <Pressable
             style={({ pressed }) => [
               styles.loginBtn,
-              pressed && { opacity: 0.85 },
+              (pressed || loading) && { opacity: 0.7 },
             ]}
             onPress={handleLogin}
+            disabled={loading}
           >
-            <Text style={styles.loginText}>LOGIN</Text>
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.loginText}>LOGIN</Text>
+            )}
           </Pressable>
 
-          {/* Or divider */}
           <View style={styles.orRow}>
             <View style={styles.orLine} />
             <Text style={styles.orText}>Or log in with</Text>
             <View style={styles.orLine} />
           </View>
 
-          {/* Social buttons */}
           <View style={styles.socialRow}>
-            <Pressable style={styles.socialBtn}>
-              <Image
-                source={require('../../assets/icon-google.png')}
-                style={styles.socialIcon}
-                resizeMode="contain"
-              />
+            {/* Google */}
+            <Pressable
+              style={[styles.socialBtn, socialLoading && { opacity: 0.5 }]}
+              onPress={handleGoogleLogin}
+              disabled={socialLoading}
+            >
+              {socialLoading ? (
+                <ActivityIndicator color="#EA4335" />
+              ) : (
+                <Image
+                  source={require('../../assets/icon-google.png')}
+                  style={styles.socialIcon}
+                  resizeMode="contain"
+                />
+              )}
             </Pressable>
-            <Pressable style={styles.socialBtn}>
-              <Image
-                source={require('../../assets/icon-facebook.png')}
-                style={styles.socialIcon}
-                resizeMode="contain"
-              />
+
+            {/* Facebook */}
+            <Pressable
+              style={[styles.socialBtn, socialLoading && { opacity: 0.5 }]}
+              onPress={handleFacebookLogin}
+              disabled={socialLoading}
+            >
+              {socialLoading ? (
+                <ActivityIndicator color="#1877F2" />
+              ) : (
+                <Image
+                  source={require('../../assets/icon-facebook.png')}
+                  style={styles.socialIcon}
+                  resizeMode="contain"
+                />
+              )}
             </Pressable>
           </View>
 
-          {/* Register */}
           <Pressable
             style={styles.registerWrap}
             onPress={() => router.replace('/register')}

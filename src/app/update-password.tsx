@@ -10,20 +10,100 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { storage } from '../services/storage';
+import { authService } from '../services/authService';
 
 export default function UpdatePasswordScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ email?: string }>();
+  const emailFromParams = (params.email as string) || '';
+
   const [password, setPassword] = useState('');
   const [repeatPassword, setRepeatPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showRepeatPassword, setShowRepeatPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleUpdate = () => {
-    console.log('Update password:', { password, repeatPassword });
-    router.replace('/login');
+  const handleUpdate = async () => {
+    let email = emailFromParams;
+    if (!email) {
+      email = (await storage.getItem('reset_email')) || '';
+    }
+
+    console.log('📧 Email dùng để update:', email);
+
+    if (!email) {
+      if (Platform.OS === 'web') {
+        window.alert('Không tìm thấy email. Vui lòng làm lại từ đầu.');
+      } else {
+        Alert.alert('Lỗi', 'Không tìm thấy email. Vui lòng làm lại từ đầu.');
+      }
+      return;
+    }
+
+    if (!password || !repeatPassword) {
+      if (Platform.OS === 'web') {
+        window.alert('Vui lòng nhập đầy đủ');
+      } else {
+        Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ');
+      }
+      return;
+    }
+
+    if (password !== repeatPassword) {
+      if (Platform.OS === 'web') {
+        window.alert('Password nhập lại không khớp');
+      } else {
+        Alert.alert('Lỗi', 'Password nhập lại không khớp');
+      }
+      return;
+    }
+
+    if (password.length < 6) {
+      if (Platform.OS === 'web') {
+        window.alert('Password phải có ít nhất 6 ký tự');
+      } else {
+        Alert.alert('Lỗi', 'Password phải có ít nhất 6 ký tự');
+      }
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authService.resetPassword(email, password);
+      await storage.removeItem('reset_email');
+
+      console.log('✅ Đặt lại mật khẩu thành công');
+
+      // Chuyển về Login trước
+      router.replace('/login');
+
+      // Alert sau khi chuyển trang (không block)
+      setTimeout(() => {
+        if (Platform.OS === 'web') {
+          window.alert('Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại.');
+        } else {
+          Alert.alert('Thành công', 'Đặt lại mật khẩu thành công');
+        }
+      }, 300);
+    } catch (error: any) {
+      console.error('❌ Update password error:', error);
+      const message =
+        error?.response?.data?.message || 'Có lỗi xảy ra';
+
+      if (Platform.OS === 'web') {
+        window.alert(message);
+      } else {
+        Alert.alert('Lỗi', message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -111,11 +191,16 @@ export default function UpdatePasswordScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.btn,
-              pressed && { opacity: 0.85 },
+              (pressed || loading) && { opacity: 0.7 },
             ]}
             onPress={handleUpdate}
+            disabled={loading}
           >
-            <Text style={styles.btnText}>UPDATE PASSWORD</Text>
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.btnText}>UPDATE PASSWORD</Text>
+            )}
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>

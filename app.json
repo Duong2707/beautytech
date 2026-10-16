@@ -8,7 +8,8 @@
     "scheme": "beautytech",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.thaoduong.beautytech"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +18,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.thaoduong.beautytech"
     },
     "web": {
       "output": "static",
@@ -33,11 +35,26 @@
           "imageWidth": 76
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Ứng dụng cần truy cập ảnh để phân tích tình trạng da.",
+          "cameraPermission": "Ứng dụng cần camera để chụp ảnh phân tích da."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "00d582bc-3592-4a43-8a22-cbd4b4066608"
+      }
     }
   }
 }

@@ -10,17 +10,22 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { authService } from '../services/authService';
+import { storage } from '../services/storage';
 
 const CODE_LENGTH = 4;
 
 export default function VerifyCodeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
-  const email = params.email ?? 'contact@gmail.com';
+  const email = params.email ?? '';
 
   const [code, setCode] = useState<string[]>(Array(CODE_LENGTH).fill(''));
+  const [loading, setLoading] = useState(false);
   const inputsRef = useRef<Array<TextInput | null>>([]);
 
   const handleChange = (text: string, index: number) => {
@@ -40,14 +45,43 @@ export default function VerifyCodeScreen() {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const fullCode = code.join('');
-    console.log('Verify code:', fullCode);
+
     if (fullCode.length !== CODE_LENGTH) {
-      console.log('Chưa nhập đủ mã');
+      if (Platform.OS === 'web') {
+        window.alert('Vui lòng nhập đủ mã OTP');
+      } else {
+        Alert.alert('Lỗi', 'Vui lòng nhập đủ mã OTP');
+      }
       return;
     }
-    router.push('/update-password');
+
+    setLoading(true);
+    try {
+      await authService.verifyOtp(email, fullCode);
+      await storage.setItem('reset_email', email);
+
+      console.log('✅ OTP hợp lệ, chuyển sang update-password');
+
+      // Chuyển trang NGAY
+      router.push({
+        pathname: '/update-password',
+        params: { email },
+      });
+    } catch (error: any) {
+      console.error('❌ Verify OTP error:', error);
+      const message =
+        error?.response?.data?.message || 'OTP không đúng';
+
+      if (Platform.OS === 'web') {
+        window.alert(message);
+      } else {
+        Alert.alert('Lỗi', message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -99,11 +133,16 @@ export default function VerifyCodeScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.btn,
-              pressed && { opacity: 0.85 },
+              (pressed || loading) && { opacity: 0.7 },
             ]}
             onPress={handleVerify}
+            disabled={loading}
           >
-            <Text style={styles.btnText}>VERIFY CODE</Text>
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.btnText}>VERIFY CODE</Text>
+            )}
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>

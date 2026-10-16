@@ -6,6 +6,7 @@ import {
   Raleway_800ExtraBold,
 } from '@expo-google-fonts/raleway';
 import { View } from 'react-native';
+import { AuthProvider } from '../context/AuthContext';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -18,5 +19,9 @@ export default function RootLayout() {
     return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <AuthProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </AuthProvider>
+  );
 }

@@ -10,19 +10,49 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { authService } from '../services/authService';
+import { storage } from '../services/storage';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleReset = () => {
-    console.log('Reset password cho email:', email);
-    router.push({
-      pathname: '/verify-code',
-      params: { email: email || 'contact@gmail.com' },
-    });
+  const handleReset = async () => {
+    if (!email) {
+      Alert.alert('Lỗi', 'Vui lòng nhập email');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authService.forgotPassword(email);
+      await storage.setItem('reset_email', email);
+
+      console.log('✅ Gửi OTP thành công, chuyển sang verify-code');
+
+      // Chuyển trang NGAY, không alert
+      router.push({
+        pathname: '/verify-code',
+        params: { email },
+      });
+    } catch (error: any) {
+      console.error('❌ Forgot password error:', error);
+      const message =
+        error?.response?.data?.message || 'Có lỗi xảy ra';
+
+      if (Platform.OS === 'web') {
+        window.alert(message);
+      } else {
+        Alert.alert('Lỗi', message);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -69,11 +99,16 @@ export default function ForgotPasswordScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.btn,
-              pressed && { opacity: 0.85 },
+              (pressed || loading) && { opacity: 0.7 },
             ]}
             onPress={handleReset}
+            disabled={loading}
           >
-            <Text style={styles.btnText}>RESET PASSWORD</Text>
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.btnText}>RESET PASSWORD</Text>
+            )}
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
