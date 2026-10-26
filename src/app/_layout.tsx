@@ -6,7 +6,10 @@ import {
   Raleway_800ExtraBold,
 } from '@expo-google-fonts/raleway';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler'; 
+
 import { AuthProvider } from '../presentation/contexts/AuthContext';
+import { CartProvider } from '../presentation/contexts/CartContext'; // <-- Thêm CartProvider
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -20,8 +23,13 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <Stack screenOptions={{ headerShown: false }} />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        {/* Bọc CartProvider vào trong AuthProvider */}
+        <CartProvider> 
+          <Stack screenOptions={{ headerShown: false }} />
+        </CartProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
