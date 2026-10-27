@@ -19,8 +19,10 @@ const api = axios.create({
 
 api.interceptors.request.use(
   async (config) => {
+    // Lấy token từ bộ nhớ máy
     const token = await storage.getItem('token');
     if (token) {
+      // Gắn vào header Authorization
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;

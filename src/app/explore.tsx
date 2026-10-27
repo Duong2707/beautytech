@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
+// @ts-ignore
 import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -81,7 +82,8 @@ export default function TabTwoScreen() {
                 project.
               </ThemedText>
               <Image
-                source={require('@/assets/images/tutorial-web.png')}
+                // Sửa thành:
+                source={require('../../assets/images/tutorial-web.png')}  
                 style={styles.imageTutorial}
               />
             </ThemedView>
@@ -93,7 +95,7 @@ export default function TabTwoScreen() {
               <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
               screen densities.
             </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
+            <Image source={require('../../assets/images/react-logo.png')} style={styles.imageReact} />
             <ExternalLink href="https://reactnative.dev/docs/images">
               <ThemedText type="linkPrimary">Learn more</ThemedText>
             </ExternalLink>

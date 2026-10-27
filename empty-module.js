@@ -1,0 +1,1 @@
+// File rỗng để thay thế better-sqlite3 trên Web

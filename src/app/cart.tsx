@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image, ScrollView, SafeAreaView, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image, ScrollView, SafeAreaView, Alert, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../presentation/contexts/CartContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
+
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
 
 const showConfirm = (title: string, message: string, onConfirm: () => void) => {
   if (Platform.OS === 'web') {
@@ -18,25 +20,33 @@ const showConfirm = (title: string, message: string, onConfirm: () => void) => {
 
 export default function CartScreen() {
   const router = useRouter();
-  const { cart, removeSelectedFromCart, clearCart, updateQuantity, toggleSelect, toggleSelectAll } = useCart();
+  const { cart, loadingCart, removeFromCart, removeSelectedFromCart, clearCart, updateQuantity, toggleSelect, toggleSelectAll } = useCart();
   const { theme } = useTheme();
 
   const selectedItems = cart.filter(item => item.selected);
-  const totalPrice = selectedItems.reduce((sum, item) => sum + (item.priceValue * item.quantity), 0);
+  const totalPrice = selectedItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
   const isAllSelected = cart.length > 0 && cart.every(item => item.selected);
 
   const formatPrice = (price: number) => price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
+
+  const handleClearAll = () => {
+    showConfirm('Xóa tất cả', 'Bạn có chắc chắn muốn xóa toàn bộ giỏ hàng?', () => clearCart());
+  };
 
   const handleDeleteSelected = () => {
     if (selectedItems.length === 0) return;
     showConfirm('Xóa mục đã chọn', `Bạn có chắc chắn muốn xóa ${selectedItems.length} sản phẩm đã chọn?`, () => removeSelectedFromCart());
   };
 
-  const handleClearAll = () => {
-    showConfirm('Xóa tất cả', 'Bạn có chắc chắn muốn xóa toàn bộ giỏ hàng?', () => clearCart());
-  };
-
   const dynamicStyles = getStyles(theme);
+
+  if (loadingCart) {
+    return (
+      <View style={[dynamicStyles.screen, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={dynamicStyles.screen}>
@@ -65,42 +75,37 @@ export default function CartScreen() {
                 <Text style={dynamicStyles.selectAllText}>Chọn tất cả ({cart.length})</Text>
               </Pressable>
               
-              {isAllSelected ? (
-                <Pressable onPress={handleClearAll} style={dynamicStyles.deleteActionBtn}>
-                  <Ionicons name="trash" size={16} color="#FF6B6B" />
-                  <Text style={dynamicStyles.deleteActionText}>Xóa tất cả</Text>
-                </Pressable>
-              ) : selectedItems.length > 0 ? (
+              {selectedItems.length > 0 && (
                 <Pressable onPress={handleDeleteSelected} style={dynamicStyles.deleteActionBtn}>
                   <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
                   <Text style={dynamicStyles.deleteActionText}>Xóa ({selectedItems.length})</Text>
                 </Pressable>
-              ) : null}
+              )}
             </View>
 
             {cart.map((item) => (
-              <View key={item.id} style={dynamicStyles.cartItem}>
-                <Pressable style={dynamicStyles.itemCheckbox} onPress={() => toggleSelect(item.id)}>
+              <View key={item._id} style={dynamicStyles.cartItem}>
+                <Pressable style={dynamicStyles.itemCheckbox} onPress={() => toggleSelect(item._id)}>
                   <Ionicons name={item.selected ? "checkbox" : "square-outline"} size={22} color={item.selected ? theme.primary : theme.textMuted} />
                 </Pressable>
 
-                <Image source={{ uri: item.image }} style={dynamicStyles.itemImage} />
+                <Image source={{ uri: item.product?.image || FALLBACK_IMAGE }} style={dynamicStyles.itemImage} />
                 
                 <View style={dynamicStyles.itemInfo}>
                   <View style={dynamicStyles.itemHeader}>
-                    <Text style={dynamicStyles.itemName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={dynamicStyles.itemName} numberOfLines={1}>{item.product?.name || 'Sản phẩm'}</Text>
                   </View>
                   
                   {item.size ? <Text style={dynamicStyles.itemSize}>Phân loại: {item.size}</Text> : null}
                   
                   <View style={dynamicStyles.bottomRow}>
-                    <Text style={dynamicStyles.itemPrice}>{item.price}</Text>
+                    <Text style={dynamicStyles.itemPrice}>{item.product?.price?.toLocaleString('vi-VN')}đ</Text>
                     <View style={dynamicStyles.quantityContainer}>
-                      <Pressable style={dynamicStyles.qtyBtn} onPress={() => updateQuantity(item.id, item.quantity - 1)}>
+                      <Pressable style={dynamicStyles.qtyBtn} onPress={() => updateQuantity(item._id, item.quantity - 1)}>
                         <Ionicons name="remove" size={16} color={theme.text} />
                       </Pressable>
                       <Text style={dynamicStyles.qtyText}>{item.quantity}</Text>
-                      <Pressable style={dynamicStyles.qtyBtn} onPress={() => updateQuantity(item.id, item.quantity + 1)}>
+                      <Pressable style={dynamicStyles.qtyBtn} onPress={() => updateQuantity(item._id, item.quantity + 1)}>
                         <Ionicons name="add" size={16} color={theme.text} />
                       </Pressable>
                     </View>
@@ -142,7 +147,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   selectAllRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
   checkbox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   selectAllText: { fontSize: 14, fontWeight: '600', color: theme.text },
-  deleteActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.isDark ? '#331111' : '#FFF0F0', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  deleteActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.isDark ? '#331111' : '#FFF0F0', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   deleteActionText: { color: '#FF6B6B', fontSize: 13, fontWeight: '700' },
   cartItem: { flexDirection: 'row', backgroundColor: theme.card, borderRadius: 15, padding: 12, marginBottom: 15, borderWidth: 1, borderColor: theme.border, alignItems: 'center' },
   itemCheckbox: { marginRight: 10 },

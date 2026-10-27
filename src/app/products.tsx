@@ -2,71 +2,68 @@ import { useMemo, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Alert, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Modal, Platform } from "react-native";
+// @ts-ignore
+import { Alert, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Modal, Platform, ActivityIndicator } from "react-native";
 import { useCart } from "../presentation/contexts/CartContext";
 import { useTheme } from "../presentation/contexts/ThemeContext";
-import BottomNav from "../presentation/components/BottomNav"; // Import BottomNav
+import { useAuth } from "../presentation/contexts/AuthContext";
+import { useWishlist } from "../presentation/contexts/WishlistContext";
+import BottomNav from "../presentation/components/BottomNav"; 
+import { useProducts } from "../presentation/hooks/useProducts"; 
 
-const categories = [
-  { name: "Tất cả", icon: "grid-outline" as const },
-  { name: "Làm sạch", icon: "water-outline" as const },
-  { name: "Serum", icon: "flask-outline" as const },
-  { name: "Dưỡng ẩm", icon: "flower-outline" as const },
-  { name: "Chống nắng", icon: "sunny-outline" as const },
-];
-
-const products = [
-  { name: "Glow Serum", detail: "Serum dưỡng sáng da", price: "259.000đ", oldPrice: "320.000đ", image: "https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?w=600&auto=format&fit=crop&q=80", color: "#F8E4E9", tag: "BÁN CHẠY", sizes: ['15ml', '30ml', '50ml'] },
-  { name: "Hydra Cream", detail: "Kem dưỡng ẩm sâu", price: "320.000đ", oldPrice: "", image: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=600&auto=format&fit=crop&q=80", color: "#F5EBDD", tag: "YÊU THÍCH", sizes: ['30ml', '50ml', '80ml'] },
-  { name: "Pure Cleanser", detail: "Sữa rửa mặt dịu nhẹ", price: "189.000đ", oldPrice: "", image: "https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?w=600&auto=format&fit=crop&q=80", color: "#E8EDE4", tag: "MỚI", sizes: ['100ml', '150ml'] },
-  { name: "Daily Sunscreen", detail: "Kem chống nắng SPF 50+", price: "285.000đ", oldPrice: "", image: "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=600&auto=format&fit=crop&q=80", color: "#F8EAD7", tag: "NỔI BẬT", sizes: ['30ml', '50ml'] },
-  { name: "Rose Toner", detail: "Nước cân bằng da dịu nhẹ", price: "199.000đ", oldPrice: "", image: "https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?w=600&auto=format&fit=crop&q=80", color: "#F8E4E9", tag: "BÁN CHẠY", sizes: ['100ml', '200ml'] },
-  { name: "Vitamin C Serum", detail: "Serum vitamin C chăm sóc da", price: "349.000đ", oldPrice: "", image: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=600&auto=format&fit=crop&q=80", color: "#F5EBDD", tag: "NỔI BẬT", sizes: ['15ml', '30ml'] },
-];
-
-function productCategory(name: string) {
-  if (name.includes("Serum")) return "Serum";
-  if (name.includes("Cream") || name.includes("Lotion")) return "Dưỡng ẩm";
-  if (name.includes("Cleanser") || name.includes("Cleansing") || name.includes("Toner")) return "Làm sạch";
-  if (name.includes("Sunscreen")) return "Chống nắng";
-  return "";
-}
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
 
 export default function ProductsScreen() {
   const router = useRouter();
   const { addToCart, cart } = useCart(); 
   const { theme } = useTheme();
-  
+  const { user } = useAuth();
+  const { wishlistIds, toggleWishlist } = useWishlist();
+  const { products, loading, error } = useProducts();
+
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
-
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [tempQuantity, setTempQuantity] = useState(1);
-  const [tempSize, setTempSize] = useState('');
+  const [tempSize, setTempSize] = useState('Mặc định');
+
+  const handleToggleWishlist = (e: any, productId: string) => {
+    e.stopPropagation(); 
+    if (!user) {
+      Alert.alert("Thông báo", "Vui lòng đăng nhập để lưu sản phẩm yêu thích!");
+      return;
+    }
+    toggleWishlist(productId);
+  };
 
   const filteredProducts = useMemo(() => {
+    if (!products) return [];
     const keyword = search.trim().toLowerCase();
-    return products.filter((product) => {
-      const matchesSearch = !keyword || `${product.name} ${product.detail}`.toLowerCase().includes(keyword);
-      const matchesCategory = selectedCategory === "Tất cả" || productCategory(product.name) === selectedCategory;
+    return products.filter((product: any) => {
+      const matchesSearch = !keyword || `${product.name} ${product.brand}`.toLowerCase().includes(keyword);
+      let matchesCategory = true;
+      if (selectedCategory !== "Tất cả") {
+        if (selectedCategory === "Làm sạch") matchesCategory = product.category === "cleanser";
+        else if (selectedCategory === "Serum") matchesCategory = product.category === "serum";
+        else if (selectedCategory === "Dưỡng ẩm") matchesCategory = product.category === "moisturizer";
+        else if (selectedCategory === "Chống nắng") matchesCategory = product.category === "sunscreen";
+      }
       return matchesSearch && matchesCategory;
     });
-  }, [search, selectedCategory]);
+  }, [products, search, selectedCategory]);
 
   const handleOpenAddModal = (product: any) => {
     setSelectedProduct(product);
     setTempQuantity(1);
-    setTempSize(product.sizes ? product.sizes[0] : 'Mặc định');
+    setTempSize(product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'Mặc định');
     setModalVisible(true);
   };
 
-  const handleConfirmAdd = () => {
+  const handleConfirmAdd = async () => {
     if (!selectedProduct) return;
-    const priceValue = parseInt(selectedProduct.price.replace(/\D/g, '')); 
-    addToCart({ id: selectedProduct.name, name: selectedProduct.name, price: selectedProduct.price, priceValue: priceValue, image: selectedProduct.image }, tempQuantity, tempSize);
+    await addToCart(selectedProduct, tempQuantity, tempSize);
     setModalVisible(false);
-    Alert.alert("Thành công", `Đã thêm ${tempQuantity} ${selectedProduct.name} (${tempSize}) vào giỏ.`);
   };
 
   const totalCartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -78,10 +75,7 @@ export default function ProductsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={dynamicStyles.scrollContent}>
         
         <View style={dynamicStyles.header}>
-          <View>
-            <Text style={dynamicStyles.logo}>Beauty<Text style={dynamicStyles.logoAccent}>Tech.</Text></Text>
-            <Text style={dynamicStyles.subtitle}>YOUR PERSONAL BEAUTY SPACE</Text>
-          </View>
+          <Text style={dynamicStyles.logo}>Beauty<Text style={dynamicStyles.logoAccent}>Tech.</Text></Text>
           <Pressable style={dynamicStyles.cartButton} onPress={() => router.push('/cart')}>
             <Ionicons name="bag-handle-outline" size={23} color={theme.primary} />
             {totalCartItems > 0 && (<View style={dynamicStyles.cartBadge}><Text style={dynamicStyles.cartBadgeText}>{totalCartItems}</Text></View>)}
@@ -93,20 +87,57 @@ export default function ProductsScreen() {
           <TextInput value={search} onChangeText={setSearch} placeholder="Tìm sản phẩm..." placeholderTextColor={theme.textMuted} style={dynamicStyles.searchInput} />
         </View>
 
-        <View style={dynamicStyles.productGrid}>
-          {filteredProducts.map((product) => (
-            <View key={product.name} style={dynamicStyles.productCard}>
-              <View style={[dynamicStyles.productImageWrap, { backgroundColor: theme.isDark ? '#333' : product.color }]}>
-                <Image source={{ uri: product.image }} style={dynamicStyles.productImage} resizeMode="cover" />
-              </View>
-              <Text style={dynamicStyles.productName} numberOfLines={1}>{product.name}</Text>
-              <Text style={dynamicStyles.productPrice}>{product.price}</Text>
-              <Pressable style={dynamicStyles.addButton} onPress={() => handleOpenAddModal(product)}>
-                <Ionicons name="add" size={20} color="#FFFFFF" /><Text style={dynamicStyles.addButtonText}>Thêm vào giỏ</Text>
-              </Pressable>
-            </View>
-          ))}
-        </View>
+        {loading ? (
+          <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
+        ) : error ? (
+          <Text style={{ color: 'red', textAlign: 'center', marginTop: 20 }}>Lỗi kết nối API: {error}</Text>
+        ) : (
+          <View style={dynamicStyles.productGrid}>
+            {filteredProducts.map((product: any) => {
+              // 👇 Lấy biến boolean 1 lần duy nhất cho cả màu và icon
+              const isFav = wishlistIds.includes(product._id);
+              
+              return (
+                <Pressable 
+                  key={product._id} 
+                  style={dynamicStyles.productCard} 
+                  onPress={() => router.push({ pathname: "/product-detail", params: { id: product._id } })}
+                >
+                  <View style={[dynamicStyles.productImageWrap, { backgroundColor: theme.isDark ? '#333' : '#F9F9F9' }]}>
+                    <Image source={{ uri: product.image || FALLBACK_IMAGE }} style={dynamicStyles.productImage} resizeMode="cover" />
+                    
+                    <Pressable 
+                      style={dynamicStyles.favoriteBtn} 
+                      onPress={(e) => handleToggleWishlist(e, product._id)}
+                    >
+                      <Ionicons 
+                        key={isFav ? "filled" : "outline"}
+                        name={isFav ? "heart" : "heart-outline"} 
+                        size={20} 
+                        color={isFav ? "#E91E63" : "#555"} 
+                      />
+                    </Pressable>
+                  </View>
+                  
+                  <Text style={dynamicStyles.productName} numberOfLines={1}>{product.name}</Text>
+                  <Text style={dynamicStyles.productBrand} numberOfLines={1}>{product.brand}</Text>
+                  
+                  <View style={dynamicStyles.ratingRow}>
+                    <Ionicons name="star" size={12} color="#FFC107" />
+                    <Text style={dynamicStyles.ratingText}>{product.rating}</Text>
+                    <Text style={dynamicStyles.soldText}>({product.sold})</Text>
+                  </View>
+
+                  <Text style={dynamicStyles.productPrice}>{product.price.toLocaleString('vi-VN')}đ</Text>
+                  
+                  <Pressable style={dynamicStyles.addButton} onPress={() => handleOpenAddModal(product)}>
+                    <Ionicons name="add" size={20} color="#FFFFFF" /><Text style={dynamicStyles.addButtonText}>Thêm vào giỏ</Text>
+                  </Pressable>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
       <BottomNav />
@@ -121,12 +152,12 @@ export default function ProductsScreen() {
             {selectedProduct && (
               <>
                 <View style={dynamicStyles.modalProductInfo}>
-                  <Image source={{ uri: selectedProduct.image }} style={dynamicStyles.modalImage} />
+                  <Image source={{ uri: selectedProduct.image || FALLBACK_IMAGE }} style={dynamicStyles.modalImage} />
                   <View style={dynamicStyles.modalTextInfo}>
-                    <Text style={dynamicStyles.modalPrice}>{selectedProduct.price}</Text>
+                    <Text style={dynamicStyles.modalPrice}>{selectedProduct.price.toLocaleString('vi-VN')}đ</Text>
                   </View>
                 </View>
-                <Text style={dynamicStyles.modalLabel}>Phân loại:</Text>
+                <Text style={dynamicStyles.modalLabel}>Phân loại (Dung tích):</Text>
                 <View style={dynamicStyles.modalSizeRow}>
                   {selectedProduct.sizes?.map((size: string) => (
                     <Pressable key={size} style={[dynamicStyles.modalSizeBtn, tempSize === size && dynamicStyles.modalSizeBtnActive]} onPress={() => setTempSize(size)}>
@@ -160,29 +191,34 @@ const getStyles = (theme: any) => StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
   logo: { fontSize: 25, fontWeight: "900", color: theme.text },
   logoAccent: { color: theme.primary },
-  subtitle: { fontSize: 8, letterSpacing: 1.5, color: theme.textMuted, marginTop: 3 },
   cartButton: { width: 45, height: 45, borderRadius: 16, backgroundColor: theme.isDark ? '#2A2A2A' : "#F9E9EE", justifyContent: "center", alignItems: "center" },
   cartBadge: { position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: theme.primary, justifyContent: "center", alignItems: "center" },
   cartBadgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
   searchBox: { height: 49, borderRadius: 16, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 10, marginBottom: 20 },
-  
-  // Đã thêm outlineStyle: 'none' để xóa viền đen trên Web
-  searchInput: { 
-    flex: 1, 
-    color: theme.text, 
-    fontSize: 13,
-    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}) 
-  },
-  
+  searchInput: { flex: 1, color: theme.text, fontSize: 13, ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}) },
   productGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 15 },
   productCard: { width: "48%", backgroundColor: theme.card, borderRadius: 18, borderWidth: 1, borderColor: theme.border, padding: 10 },
-  productImageWrap: { height: 150, borderRadius: 13, overflow: "hidden" },
+  productImageWrap: { height: 150, borderRadius: 13, overflow: "hidden", position: 'relative' },
   productImage: { width: "100%", height: "100%" },
+  
+  favoriteBtn: { 
+    position: 'absolute', top: 8, right: 8, 
+    width: 32, height: 32, 
+    backgroundColor: '#FFF', 
+    borderRadius: 16, 
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3,
+    zIndex: 10 
+  },
+
   productName: { fontSize: 14, fontWeight: "800", color: theme.text, marginTop: 10 },
+  productBrand: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 },
+  ratingText: { fontSize: 12, color: theme.text, fontWeight: "700" },
+  soldText: { fontSize: 10, color: theme.textMuted },
   productPrice: { fontSize: 14, fontWeight: "800", color: theme.primary, marginTop: 5, marginBottom: 10 },
   addButton: { height: 34, backgroundColor: theme.primary, borderRadius: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
   addButtonText: { fontSize: 11, fontWeight: "700", color: "#FFFFFF" },
-  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   modalContent: { width: '90%', maxWidth: 400, backgroundColor: theme.card, borderRadius: 20, padding: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },

@@ -1,8 +1,10 @@
-export type User = {
-  id: string;
+export interface User {
+  _id?: string;
   email: string;
-  fullName: string;
+  fullName?: string;
   phone?: string;
+  address?: string; // <-- Thêm dòng này
+  role?: 'user' | 'admin';
   avatar?: string;
-  role: 'user' | 'admin';
-};
+  token?: string;
+}

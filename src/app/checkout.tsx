@@ -1,10 +1,15 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, TextInput, Image, Alert, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useMemo, useEffect } from 'react';
+// @ts-ignore
+import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image, Alert, Platform, ActivityIndicator } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../presentation/contexts/CartContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
+import { useAuth } from '../presentation/contexts/AuthContext';
+import { fetchAddresses } from '../services/addressApi';
+
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
 
 const MOCK_VOUCHERS = [
   { id: 'v1', code: 'NEWBIE20', title: 'Giảm 20.000đ', discount: 20000, minSpend: 0 },
@@ -14,19 +19,91 @@ const MOCK_VOUCHERS = [
 
 export default function CheckoutScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { cart, clearCart } = useCart();
   const { theme } = useTheme();
+  const { user } = useAuth(); 
 
   const selectedItems = cart.filter(item => item.selected);
-  const subTotal = selectedItems.reduce((sum, item) => sum + (item.priceValue * item.quantity), 0);
+  const subTotal = selectedItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
 
-  const [address, setAddress] = useState('123 Đường Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM');
-  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [currentAddress, setCurrentAddress] = useState<any>(null);
+  const [isLoadingAddress, setIsLoadingAddress] = useState(true);
+
   const [shipping, setShipping] = useState<'fast' | 'slow'>('fast');
   const shippingFee = shipping === 'fast' ? 30000 : 15000;
   const [payment, setPayment] = useState<'cod' | 'qr'>('cod');
   const [isPaid, setIsPaid] = useState(false);
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
+
+  // 1. TỰ ĐỘNG LẤY ĐỊA CHỈ MẶC ĐỊNH TỪ DB
+  useEffect(() => {
+    const loadDefaultAddress = async () => {
+      try {
+        const token = user?.token || "fake_token";
+        const addresses = await fetchAddresses(token);
+        
+        if (addresses && addresses.length > 0) {
+          const defaultAddr = addresses.find((a: any) => a.isDefault) || addresses[0];
+          setCurrentAddress(defaultAddr);
+        } else {
+          setCurrentAddress({ address: 'Vui lòng thêm địa chỉ giao hàng' });
+        }
+      } catch (error) {
+        console.log("Lỗi lấy địa chỉ mặc định:", error);
+        setCurrentAddress({ address: 'Lỗi tải địa chỉ' });
+      } finally {
+        setIsLoadingAddress(false);
+      }
+    };
+
+    if (!params.selectedAddress) {
+      loadDefaultAddress();
+    }
+  }, [user]);
+
+  // 2. LẮNG NGHE ĐỊA CHỈ MỚI CHỌN TỪ TRANG QUẢN LÝ
+  useEffect(() => {
+    if (params.selectedAddress) {
+      const parsedAddress = JSON.parse(params.selectedAddress as string);
+      setCurrentAddress(parsedAddress);
+      setIsLoadingAddress(false);
+    }
+  }, [params.selectedAddress]);
+
+  // 3. TỰ ĐỘNG ÁP DỤNG VOUCHER (Từ URL hoặc từ AsyncStorage)
+  useEffect(() => {
+    const checkAndApplyVoucher = async () => {
+      let codeToApply = params.voucherCode;
+
+      // Nếu không có mã nào được gửi qua URL, tìm trong bộ nhớ tạm
+      if (!codeToApply) {
+        const savedCode = await AsyncStorage.getItem('@pendingVoucher');
+        if (savedCode) {
+          codeToApply = savedCode;
+          // Dùng xong thì xóa đi để không bị lưu cho lần mua sau
+          await AsyncStorage.removeItem('@pendingVoucher');
+        }
+      }
+
+      if (codeToApply) {
+        const voucherToApply = MOCK_VOUCHERS.find(v => v.code === codeToApply);
+        if (voucherToApply) {
+          if (subTotal >= voucherToApply.minSpend) {
+            setAppliedVoucher(voucherToApply);
+          } else {
+            if (Platform.OS === 'web') {
+              window.alert(`Mã ${voucherToApply.code} chỉ áp dụng cho đơn từ ${voucherToApply.minSpend.toLocaleString('vi-VN')}đ`);
+            } else {
+              Alert.alert('Thông báo', `Mã ${voucherToApply.code} chỉ áp dụng cho đơn từ ${voucherToApply.minSpend.toLocaleString('vi-VN')}đ`);
+            }
+          }
+        }
+      }
+    };
+
+    checkAndApplyVoucher();
+  }, [params.voucherCode, subTotal]);
 
   const availableVouchers = useMemo(() => MOCK_VOUCHERS.filter(v => subTotal >= v.minSpend), [subTotal]);
   const discountAmount = appliedVoucher ? appliedVoucher.discount : 0;
@@ -41,15 +118,35 @@ export default function CheckoutScreen() {
 
   const handlePlaceOrder = async () => {
     if (selectedItems.length === 0) { Alert.alert('Lỗi', 'Không có sản phẩm nào để thanh toán!'); return; }
-    if (!address.trim()) { Alert.alert('Lỗi', 'Vui lòng nhập địa chỉ giao hàng!'); return; }
+    if (!currentAddress || currentAddress.address === 'Vui lòng thêm địa chỉ giao hàng') {
+      Alert.alert('Lỗi', 'Vui lòng chọn địa chỉ giao hàng!'); return; 
+    }
+    
+    const finalPhone = currentAddress?.phone || user?.phone;
+    if (!finalPhone) { 
+      Alert.alert('Lỗi', 'Vui lòng cập nhật số điện thoại nhận hàng trong phần Hồ sơ hoặc Địa chỉ!'); 
+      return; 
+    }
 
     try {
+      const finalRecipientName = currentAddress?.name || user?.fullName || 'Khách hàng';
+
       const newOrder = {
         id: 'ORD' + Math.floor(Math.random() * 1000000),
         date: new Date().toISOString(),
-        items: selectedItems,
+        recipientName: finalRecipientName,
+        phone: finalPhone,
+        items: selectedItems.map(item => ({
+          _id: item._id,
+          name: item.product.name,
+          price: item.product.price,
+          image: item.product.image || FALLBACK_IMAGE,
+          quantity: item.quantity,
+          size: item.size
+        })),
         subTotal, shippingFee, discount: discountAmount, total: totalPrice,
-        address, paymentMethod: payment,
+        address: currentAddress.address,
+        paymentMethod: payment,
         paymentStatus: payment === 'qr' ? (isPaid ? 'paid' : 'pending') : 'unpaid',
         orderStatus: 'pending',
       };
@@ -59,7 +156,7 @@ export default function CheckoutScreen() {
       orders.unshift(newOrder);
       await AsyncStorage.setItem('@orders', JSON.stringify(orders));
 
-      clearCart(); 
+      await clearCart(); 
       
       if (Platform.OS === 'web') {
         window.alert('Đặt hàng thành công! Cảm ơn bạn đã mua sắm tại BeautyTech.');
@@ -77,7 +174,7 @@ export default function CheckoutScreen() {
   return (
     <SafeAreaView style={dynamicStyles.screen}>
       <View style={dynamicStyles.header}>
-        <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/home')}>
+        <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/cart')}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
         <Text style={dynamicStyles.headerTitle}>Xác nhận đơn hàng</Text>
@@ -85,12 +182,48 @@ export default function CheckoutScreen() {
       </View>
 
       <ScrollView contentContainerStyle={dynamicStyles.content}>
+        
+        {/* === PHẦN ĐỊA CHỈ GIAO HÀNG === */}
         <View style={dynamicStyles.sectionCard}>
           <View style={dynamicStyles.sectionHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="location" size={20} color={theme.primary} /><Text style={dynamicStyles.sectionTitle}>Địa chỉ giao hàng</Text></View>
-            <Pressable onPress={() => setIsEditingAddress(!isEditingAddress)}><Text style={dynamicStyles.editText}>{isEditingAddress ? 'Lưu' : 'Sửa'}</Text></Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="location" size={20} color={theme.primary} />
+              <Text style={dynamicStyles.sectionTitle}>Địa chỉ giao hàng</Text>
+            </View>
+            <Pressable onPress={() => router.push('/shipping-address?selectMode=true')}>
+              <Text style={dynamicStyles.editText}>Quản lý / Thay đổi</Text>
+            </Pressable>
           </View>
-          {isEditingAddress ? <TextInput style={dynamicStyles.addressInput} value={address} onChangeText={setAddress} multiline placeholder="Nhập địa chỉ..." placeholderTextColor={theme.textMuted} /> : <Text style={dynamicStyles.addressText}>{address}</Text>}
+
+          {isLoadingAddress ? (
+             <ActivityIndicator size="small" color={theme.primary} style={{ marginVertical: 20 }} />
+          ) : (
+            <View style={{ gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 14, color: theme.textMuted, width: 110 }}>Người nhận:</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text, flex: 1 }}>
+                  {currentAddress?.name || user?.fullName || 'Khách hàng'}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 14, color: theme.textMuted, width: 110 }}>Số điện thoại:</Text>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: theme.text, flex: 1 }}>
+                  {currentAddress?.phone || user?.phone || 'Chưa có SĐT'}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Text style={{ fontSize: 14, color: theme.textMuted, width: 110 }}>Địa chỉ:</Text>
+                <Text style={{ fontSize: 14, color: theme.text, flex: 1, lineHeight: 22 }}>
+                  {currentAddress?.address || 'Chưa có địa chỉ'}
+                </Text>
+              </View>
+              {(!currentAddress?.phone && !user?.phone) && (
+                <Text style={{ fontSize: 12, color: '#FF6B6B', marginTop: 4, fontStyle: 'italic' }}>
+                  * Tài khoản chưa có SĐT. Vui lòng cập nhật trong phần Hồ sơ hoặc Địa chỉ.
+                </Text>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={dynamicStyles.sectionCard}>
@@ -146,13 +279,21 @@ export default function CheckoutScreen() {
 
         <View style={dynamicStyles.sectionCard}>
           <View style={dynamicStyles.sectionHeader}><Text style={dynamicStyles.sectionTitle}>Sản phẩm ({selectedItems.length})</Text></View>
+          
           {selectedItems.map((item) => (
-            <View key={item.id} style={dynamicStyles.summaryItem}>
-              <Image source={{ uri: item.image }} style={dynamicStyles.summaryImage} />
-              <View style={{ flex: 1, marginLeft: 10 }}><Text style={dynamicStyles.summaryName} numberOfLines={1}>{item.name}</Text><Text style={dynamicStyles.summarySize}>{item.size}</Text></View>
-              <View style={{ alignItems: 'flex-end' }}><Text style={dynamicStyles.summaryPrice}>{item.price}</Text><Text style={dynamicStyles.summaryQty}>x{item.quantity}</Text></View>
+            <View key={item._id} style={dynamicStyles.summaryItem}>
+              <Image source={{ uri: item.product?.image || FALLBACK_IMAGE }} style={dynamicStyles.summaryImage} />
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={dynamicStyles.summaryName} numberOfLines={1}>{item.product?.name}</Text>
+                <Text style={dynamicStyles.summarySize}>{item.size}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={dynamicStyles.summaryPrice}>{item.product?.price.toLocaleString('vi-VN')}đ</Text>
+                <Text style={dynamicStyles.summaryQty}>x{item.quantity}</Text>
+              </View>
             </View>
           ))}
+          
           <View style={dynamicStyles.divider} />
           <View style={dynamicStyles.feeRow}><Text style={dynamicStyles.feeLabel}>Tổng tiền hàng:</Text><Text style={dynamicStyles.feeValue}>{formatPrice(subTotal)}</Text></View>
           <View style={dynamicStyles.feeRow}><Text style={dynamicStyles.feeLabel}>Phí vận chuyển:</Text><Text style={dynamicStyles.feeValue}>+{formatPrice(shippingFee)}</Text></View>
@@ -180,8 +321,6 @@ const getStyles = (theme: any) => StyleSheet.create({
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: theme.text },
   editText: { color: theme.primary, fontWeight: '700', fontSize: 14 },
-  addressText: { fontSize: 14, color: theme.text, lineHeight: 22 },
-  addressInput: { backgroundColor: theme.background, padding: 12, borderRadius: 10, fontSize: 14, color: theme.text, borderWidth: 1, borderColor: theme.border },
   voucherRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.background, padding: 12, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: theme.border },
   voucherRowApplied: { borderColor: '#4CAF50', backgroundColor: theme.isDark ? '#1E3320' : '#E8F5E9' },
   voucherLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },

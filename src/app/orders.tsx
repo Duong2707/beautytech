@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image, ActivityIndicator, Alert, Modal, TextInput } from 'react-native';
+// @ts-ignore
+import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image, ActivityIndicator, Alert, Modal, TextInput, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,14 +13,19 @@ export default function OrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Tất cả');
 
-  // State cho Modal Thanh toán QR
   const [showQR, setShowQR] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
-  // State cho Modal Đánh giá
   const [showReview, setShowReview] = useState(false);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
+
+  // STATE CHO THÔNG BÁO (TOAST)
+  const [toastMessage, setToastMessage] = useState('');
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3500); // Hiện 3.5 giây rồi tắt
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -33,7 +39,7 @@ export default function OrdersScreen() {
       if (data) {
         const parsedOrders = JSON.parse(data).map((o: any) => ({
           ...o,
-          orderStatus: o.orderStatus || 'pending' // Đảm bảo tương thích với data cũ
+          orderStatus: o.orderStatus || 'pending'
         }));
         setOrders(parsedOrders);
       }
@@ -56,21 +62,34 @@ export default function OrdersScreen() {
     );
     await saveOrders(updated);
     setShowQR(false);
-    Alert.alert('Thành công', 'Đã xác nhận thanh toán đơn hàng!');
+    showToast(`Đã xác nhận thanh toán đơn ${selectedOrder.id}!`);
   };
 
-  // Hàm giả lập chuyển trạng thái (Dùng để test vì chưa có App Shipper)
   const simulateNextStep = async (order: any) => {
     let nextStatus = 'pending';
-    if (order.orderStatus === 'pending') nextStatus = 'confirmed'; 
-    else if (order.orderStatus === 'confirmed') nextStatus = 'shipping'; 
-    else if (order.orderStatus === 'shipping') nextStatus = 'delivered'; 
-    else return;
+    let message = '';
+
+    // 👇 CHÈN THÊM MÃ ĐƠN HÀNG VÀO THÔNG BÁO
+    if (order.orderStatus === 'pending') {
+      nextStatus = 'confirmed'; 
+      message = `Đơn hàng ${order.id} đã được người bán xác nhận!`;
+    } else if (order.orderStatus === 'confirmed') {
+      nextStatus = 'shipping'; 
+      message = `Shipper đã lấy đơn ${order.id} và đang giao!`;
+    } else if (order.orderStatus === 'shipping') {
+      nextStatus = 'delivered'; 
+      message = `Đơn hàng ${order.id} đã giao thành công!`;
+    } else {
+      return;
+    }
 
     const updated = orders.map(o => 
       o.id === order.id ? { ...o, orderStatus: nextStatus } : o
     );
     await saveOrders(updated);
+    
+    // Gọi hiển thị thông báo
+    showToast(message);
   };
 
   const handleSubmitReview = async () => {
@@ -80,7 +99,7 @@ export default function OrdersScreen() {
     );
     await saveOrders(updated);
     setShowReview(false);
-    Alert.alert('Cảm ơn bạn!', 'Đánh giá của bạn đã được gửi đi.');
+    showToast(`Cảm ơn bạn! Đánh giá đơn ${selectedOrder.id} đã được gửi.`);
   };
 
   const formatPrice = (price: number) => price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
@@ -90,12 +109,21 @@ export default function OrdersScreen() {
     if (activeTab === 'Chờ xác nhận') return order.orderStatus === 'pending';
     if (activeTab === 'Chờ lấy hàng') return order.orderStatus === 'confirmed';
     if (activeTab === 'Chờ giao hàng') return order.orderStatus === 'shipping';
-    if (activeTab === 'Đánh giá') return order.orderStatus === 'delivered'; 
+    if (activeTab === 'Đánh giá') return order.orderStatus === 'delivered' || order.orderStatus === 'reviewed'; 
     return true;
   });
 
   return (
     <SafeAreaView style={styles.screen}>
+      
+      {/* 👇 TOAST THÔNG BÁO NỔI LÊN TRÊN CÙNG */}
+      {toastMessage !== '' && (
+        <View style={styles.toastContainer}>
+          <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </View>
+      )}
+
       {/* HEADER */}
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/account')}>
@@ -135,7 +163,6 @@ export default function OrdersScreen() {
             
             return (
               <View key={order.id} style={styles.orderCard}>
-                {/* Header Card: Mã ĐH + Trạng thái */}
                 <View style={styles.orderHeader}>
                   <Text style={styles.orderId}>Mã ĐH: {order.id}</Text>
                   <Text style={[styles.orderStatus, { color: '#FF9800' }]}>
@@ -146,7 +173,6 @@ export default function OrdersScreen() {
                   </Text>
                 </View>
                 
-                {/* Sản phẩm đại diện */}
                 {order.items.length > 0 && (
                   <View style={styles.itemPreview}>
                     <Image source={{ uri: order.items[0].image }} style={styles.itemImg} />
@@ -158,7 +184,6 @@ export default function OrdersScreen() {
                   </View>
                 )}
 
-                {/* Hiển thị đánh giá nếu đã đánh giá rồi */}
                 {order.orderStatus === 'reviewed' && (
                   <View style={styles.reviewedBox}>
                     <Text style={styles.reviewedTitle}>Đánh giá của bạn:</Text>
@@ -171,7 +196,6 @@ export default function OrdersScreen() {
                   </View>
                 )}
 
-                {/* Footer Card */}
                 <View style={styles.orderFooter}>
                   <View>
                     <Text style={styles.totalLabel}>Tổng tiền:</Text>
@@ -181,10 +205,7 @@ export default function OrdersScreen() {
                     </Text>
                   </View>
                   
-                  {/* Nút Hành động theo trạng thái */}
                   <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                    
-                    {/* Trạng thái: Chờ xác nhận */}
                     {order.orderStatus === 'pending' && (
                       isPendingQR ? (
                         <Pressable style={styles.payNowBtn} onPress={() => { setSelectedOrder(order); setShowQR(true); }}>
@@ -197,21 +218,18 @@ export default function OrdersScreen() {
                       )
                     )}
 
-                    {/* Trạng thái: Chờ lấy hàng */}
                     {order.orderStatus === 'confirmed' && (
                       <Pressable style={styles.simulateBtn} onPress={() => simulateNextStep(order)}>
                         <Text style={styles.simulateText}>Giả lập: Shipper lấy hàng</Text>
                       </Pressable>
                     )}
 
-                    {/* Trạng thái: Chờ giao hàng */}
                     {order.orderStatus === 'shipping' && (
                       <Pressable style={styles.simulateBtn} onPress={() => simulateNextStep(order)}>
                         <Text style={styles.simulateText}>Giả lập: Giao hàng thành công</Text>
                       </Pressable>
                     )}
 
-                    {/* Trạng thái: Đã giao (Cần đánh giá) */}
                     {order.orderStatus === 'delivered' && (
                       <Pressable style={styles.reviewBtn} onPress={() => { 
                         setSelectedOrder(order); 
@@ -291,6 +309,30 @@ export default function OrdersScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#FFFAF8' },
+  
+  // TOAST STYLES
+  toastContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'web' ? 20 : 50,
+    left: '5%',
+    right: '5%',
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    zIndex: 9999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 10,
+  },
+  toastText: { color: '#FFF', fontWeight: '700', fontSize: 14, textAlign: 'center' },
+
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8EDF0', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#49313C' },

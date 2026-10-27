@@ -1,19 +1,20 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, Alert, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Image, Alert, ActivityIndicator, ScrollView, Modal, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import api from '../data/datasources/remote/api';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Thêm lại AsyncStorage
 import { useCart } from '../presentation/contexts/CartContext'; 
 import { useTheme } from '../presentation/contexts/ThemeContext';
 
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
+
 const mockProducts = [
-  { id: '1', name: 'Glow Serum', detail: 'Serum dưỡng sáng da', price: '259.000đ', priceValue: 259000, image: 'https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?w=600&auto=format&fit=crop&q=80', target: ['Da không đều màu', 'Da xỉn màu', 'Da dầu'], usage: 'Thoa 2-3 giọt lên da sạch vào buổi sáng và tối. Vỗ nhẹ để thẩm thấu.' },
-  { id: '2', name: 'Hydra Cream', detail: 'Kem dưỡng ẩm sâu', price: '320.000đ', priceValue: 320000, image: 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=600&auto=format&fit=crop&q=80', target: ['Da khô', 'Thiếu ẩm / Bong tróc', 'Da thường'], usage: 'Lấy một lượng vừa đủ thoa đều lên mặt sau bước dùng serum.' },
-  { id: '3', name: 'Pure Cleanser', detail: 'Sữa rửa mặt dịu nhẹ', price: '189.000đ', priceValue: 189000, image: 'https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?w=600&auto=format&fit=crop&q=80', target: ['Da dầu', 'Lỗ chân lông to', 'Da nhạy cảm', 'Dị ứng / Kích ứng'], usage: 'Lấy một lượng nhỏ tạo bọt, massage nhẹ nhàng trên mặt ướt, sau đó rửa sạch.' },
-  { id: '4', name: 'La Roche-Posay', detail: 'Sữa rửa mặt cho da mụn', price: '550.000đ', priceValue: 550000, image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=600&auto=format&fit=crop&q=80', target: ['Da dầu', 'Lỗ chân lông to', 'Mụn ẩn'], usage: 'Dùng 2 lần/ngày, tạo bọt và rửa sạch.' }, 
+  { _id: '1', name: 'Glow Serum', detail: 'Serum dưỡng sáng da', price: '259.000đ', priceValue: 259000, image: FALLBACK_IMAGE, target: ['Da không đều màu', 'Da xỉn màu', 'Da dầu'], usage: 'Thoa 2-3 giọt lên da sạch vào buổi sáng và tối. Vỗ nhẹ để thẩm thấu.' },
+  { _id: '2', name: 'Hydra Cream', detail: 'Kem dưỡng ẩm sâu', price: '320.000đ', priceValue: 320000, image: FALLBACK_IMAGE, target: ['Da khô', 'Thiếu ẩm / Bong tróc', 'Da thường'], usage: 'Lấy một lượng vừa đủ thoa đều lên mặt sau bước dùng serum.' },
+  { _id: '3', name: 'Pure Cleanser', detail: 'Sữa rửa mặt dịu nhẹ', price: '189.000đ', priceValue: 189000, image: FALLBACK_IMAGE, target: ['Da dầu', 'Lỗ chân lông to', 'Da nhạy cảm', 'Dị ứng / Kích ứng'], usage: 'Lấy một lượng nhỏ tạo bọt, massage nhẹ nhàng trên mặt ướt, sau đó rửa sạch.' },
+  { _id: '4', name: 'La Roche-Posay', detail: 'Sữa rửa mặt cho da mụn', price: '550.000đ', priceValue: 550000, image: FALLBACK_IMAGE, target: ['Da dầu', 'Lỗ chân lông to', 'Mụn ẩn'], usage: 'Dùng 2 lần/ngày, tạo bọt và rửa sạch.' }, 
 ];
 
 export default function AnalyzeScreen() {
@@ -21,40 +22,40 @@ export default function AnalyzeScreen() {
   const { addToCart } = useCart(); 
   const { theme } = useTheme();
   
-  const { surveySkinType, surveyConcerns, surveyAge, surveyRoutine, surveyBudget } = useLocalSearchParams<{ surveySkinType?: string, surveyConcerns?: string, surveyAge?: string, surveyRoutine?: string, surveyBudget?: string }>();
+  const { surveySkinType, surveyConcerns, surveyAge, surveyRoutine, surveyBudget } = useLocalSearchParams<{ 
+    surveySkinType?: string, surveyConcerns?: string, surveyAge?: string, surveyRoutine?: string, surveyBudget?: string 
+  }>();
   
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [isSaved, setIsSaved] = useState(false);
 
+  const [usageModalVisible, setUsageModalVisible] = useState(false);
+  const [currentUsage, setCurrentUsage] = useState('');
+  const [cartModalVisible, setCartModalVisible] = useState(false);
+
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) { Alert.alert('Quyền truy cập', 'Bạn cần cấp quyền truy cập thư viện ảnh.'); return; }
-    const pickerResult = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({ 
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, 
+      allowsEditing: true, aspect: [1, 1], quality: 0.8 
+    });
     if (!pickerResult.canceled) { setImage(pickerResult.assets[0].uri); setResult(null); setIsSaved(false); }
   };
 
   const handleAnalyze = async () => {
     if (!image) { Alert.alert('Lỗi', 'Vui lòng chọn hoặc chụp ảnh'); return; }
     setLoading(true);
-    try {
-      const formData = new FormData();
-      if (Platform.OS === 'web') {
-        const response = await fetch(image);
-        const blob = await response.blob();
-        formData.append('image', blob, 'photo.jpg');
-      } else {
-        formData.append('image', { uri: image, name: 'photo.jpg', type: 'image/jpeg' } as any);
-      }
-      const res = await api.post('/api/skin/analyze', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setResult(res.data);
+    
+    // Chế độ giả lập (Mock Data)
+    setTimeout(() => {
+      const isAcne = Math.random() > 0.5;
+      setResult({ success: true, data: { skinCondition: isAcne ? 'Acne' : 'Normal', confidence: isAcne ? 0.9563 : 0.8912 } });
       setIsSaved(false);
-    } catch (error: any) {
-      Alert.alert('Lỗi', error.response?.data?.detail || 'Không thể phân tích ảnh.');
-    } finally {
       setLoading(false);
-    }
+    }, 1500);
   };
 
   const getRecommendedProducts = () => {
@@ -76,16 +77,25 @@ export default function AnalyzeScreen() {
 
   const recommendedProducts = getRecommendedProducts();
 
-  const handleAddToCart = (product: any) => {
-    addToCart(product, 1, 'Mặc định'); 
-    Alert.alert('Thành công', `Đã thêm ${product.name} vào giỏ hàng!`);
+  const handleShowUsage = (usage: string) => {
+    setCurrentUsage(usage);
+    setUsageModalVisible(true);
   };
 
+  const handleAddToCart = async (product: any) => {
+    await addToCart(product, 1, 'Mặc định'); 
+    setCartModalVisible(true);
+  };
+
+  // ĐÃ SỬA: Quay lại dùng AsyncStorage
   const saveToDiary = async () => {
     if (isSaved) return; 
     try {
       const newEntry = {
-        id: Date.now().toString(), date: new Date().toISOString(), skinCondition: result.data.skinCondition, confidence: result.data.confidence,
+        id: Date.now().toString(), 
+        date: new Date().toISOString(), 
+        skinCondition: result.data.skinCondition, 
+        confidence: result.data.confidence,
         survey: { type: surveySkinType, concerns: surveyConcerns, age: surveyAge, routine: surveyRoutine, budget: surveyBudget }
       };
       const existingData = await AsyncStorage.getItem('@skin_diary');
@@ -93,7 +103,15 @@ export default function AnalyzeScreen() {
       history.unshift(newEntry); 
       await AsyncStorage.setItem('@skin_diary', JSON.stringify(history));
       setIsSaved(true);
-    } catch (error) { Alert.alert('Lỗi', 'Không thể lưu dữ liệu.'); }
+      
+      if (Platform.OS === 'web') {
+        window.alert("Đã lưu kết quả vào Nhật ký da!");
+      } else {
+        Alert.alert("Thành công", "Đã lưu kết quả vào Nhật ký da!");
+      }
+    } catch (error) { 
+      Alert.alert('Lỗi', 'Không thể lưu dữ liệu.'); 
+    }
   };
 
   const dynamicStyles = getStyles(theme);
@@ -146,7 +164,7 @@ export default function AnalyzeScreen() {
                 <Text style={dynamicStyles.recommendTitle}>✨ Sản phẩm gợi ý dành riêng cho bạn</Text>
                 <View style={dynamicStyles.productList}>
                   {recommendedProducts.map(product => (
-                    <View key={product.id} style={dynamicStyles.productCard}>
+                    <View key={product._id} style={dynamicStyles.productCard}>
                       <View style={dynamicStyles.productInfoRow}>
                         <Image source={{ uri: product.image }} style={dynamicStyles.productImage} />
                         <View style={dynamicStyles.productTextContent}>
@@ -156,8 +174,14 @@ export default function AnalyzeScreen() {
                         </View>
                       </View>
                       <View style={dynamicStyles.actionRow}>
-                        <Pressable style={dynamicStyles.usageButton} onPress={() => Alert.alert('Cách sử dụng', product.usage)}><Ionicons name="information-circle-outline" size={16} color={theme.primary} /><Text style={dynamicStyles.usageButtonText}>Cách dùng</Text></Pressable>
-                        <Pressable style={dynamicStyles.addToCartButton} onPress={() => handleAddToCart(product)}><Ionicons name="cart-outline" size={16} color="#FFFFFF" /><Text style={dynamicStyles.addToCartText}>Thêm giỏ</Text></Pressable>
+                        <Pressable style={dynamicStyles.usageButton} onPress={() => handleShowUsage(product.usage)}>
+                          <Ionicons name="information-circle-outline" size={16} color={theme.primary} />
+                          <Text style={dynamicStyles.usageButtonText}>Cách dùng</Text>
+                        </Pressable>
+                        <Pressable style={dynamicStyles.addToCartButton} onPress={() => handleAddToCart(product)}>
+                          <Ionicons name="cart-outline" size={16} color="#FFFFFF" />
+                          <Text style={dynamicStyles.addToCartText}>Thêm giỏ</Text>
+                        </Pressable>
                       </View>
                     </View>
                   ))}
@@ -178,6 +202,42 @@ export default function AnalyzeScreen() {
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={usageModalVisible} transparent={true} animationType="fade">
+        <View style={dynamicStyles.modalOverlay}>
+          <View style={dynamicStyles.modalContent}>
+            <View style={dynamicStyles.modalHeader}>
+              <Text style={dynamicStyles.modalTitle}>Cách sử dụng</Text>
+              <Pressable onPress={() => setUsageModalVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></Pressable>
+            </View>
+            <Text style={{ fontSize: 14, lineHeight: 22, color: theme.text }}>{currentUsage}</Text>
+            <Pressable style={dynamicStyles.modalCloseBtn} onPress={() => setUsageModalVisible(false)}>
+              <Text style={dynamicStyles.modalCloseText}>Đã hiểu</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={cartModalVisible} transparent={true} animationType="fade">
+        <View style={dynamicStyles.modalOverlay}>
+          <View style={dynamicStyles.modalContent}>
+            <View style={{ alignItems: 'center', paddingVertical: 10 }}>
+              <Ionicons name="checkmark-circle" size={60} color="#4CAF50" />
+              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.text, marginTop: 15, marginBottom: 10 }}>Thành công!</Text>
+              <Text style={{ fontSize: 14, color: theme.textMuted, textAlign: 'center' }}>Sản phẩm đã được thêm vào giỏ hàng của bạn.</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+              <Pressable style={[dynamicStyles.modalCloseBtn, { flex: 1, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }]} onPress={() => setCartModalVisible(false)}>
+                <Text style={[dynamicStyles.modalCloseText, { color: theme.text }]}>Tiếp tục</Text>
+              </Pressable>
+              <Pressable style={[dynamicStyles.modalCloseBtn, { flex: 1, backgroundColor: theme.primary }]} onPress={() => { setCartModalVisible(false); router.push('/cart'); }}>
+                <Text style={[dynamicStyles.modalCloseText, { color: '#FFF' }]}>Xem giỏ</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -229,4 +289,10 @@ const getStyles = (theme: any) => StyleSheet.create({
   saveDiaryButtonSaved: { backgroundColor: '#FFC107' },
   saveDiaryText: { fontSize: 15, fontWeight: '800', color: theme.isDark ? '#121212' : '#FFFFFF' },
   viewDiaryButton: { backgroundColor: theme.primary, width: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+  modalContent: { width: '90%', maxWidth: 400, backgroundColor: theme.card, borderRadius: 20, padding: 20 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
+  modalCloseBtn: { paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginTop: 15 },
+  modalCloseText: { fontSize: 15, fontWeight: '800', color: theme.primary },
 });

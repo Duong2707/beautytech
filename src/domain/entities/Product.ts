@@ -1,15 +1,17 @@
-export type Product = {
+export interface Product {
   id: string;
+  _id?: string; // Thêm _id từ MongoDB trả về
   name: string;
   brand: string;
   price: number;
   originalPrice?: number;
   image: string;
   category: string;
-  description?: string;
-  ingredients?: string[];
+  description: string;
+  sizes?: string[]; // Thêm mảng kích thước
   skinTypes?: string[];
   concerns?: string[];
-  rating?: number;
-  sold?: number;
-};
+  stock?: number;
+  rating: number; // Thêm đánh giá
+  sold: number; // Thêm số lượng đã bán
+}

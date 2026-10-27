@@ -10,7 +10,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider } from '../presentation/contexts/AuthContext';
 import { CartProvider } from '../presentation/contexts/CartContext';
-import { ThemeProvider } from '../presentation/contexts/ThemeContext'; // <-- Đảm bảo có dòng này
+import { ThemeProvider } from '../presentation/contexts/ThemeContext'; 
+// 👇 1. Import thêm WishlistProvider
+import { WishlistProvider } from '../presentation/contexts/WishlistContext'; 
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -27,8 +29,11 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <CartProvider>
-          <ThemeProvider> {/* <-- BỌC THÊM THẺ NÀY VÀO ĐÂY */}
-            <Stack screenOptions={{ headerShown: false }} />
+          <ThemeProvider> 
+            {/* 👇 2. Bọc WishlistProvider ở đây, bên ngoài thẻ Stack */}
+            <WishlistProvider>
+              <Stack screenOptions={{ headerShown: false }} />
+            </WishlistProvider>
           </ThemeProvider>
         </CartProvider>
       </AuthProvider>

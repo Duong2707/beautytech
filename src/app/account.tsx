@@ -1,11 +1,13 @@
-import { useState } from "react";
-import BottomNav from "../presentation/components/BottomNav";
-import { useRouter } from "expo-router";
+import { useState, useCallback } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+// @ts-ignore
 import { Alert, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, View, Platform, Switch } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../presentation/contexts/AuthContext";
 import { useTheme } from "../presentation/contexts/ThemeContext"; 
+import { useWishlist } from "../presentation/contexts/WishlistContext"; // 👈 Thêm import
 
 const menuItems = [
   { icon: "person-outline" as const, title: "Chỉnh sửa hồ sơ", subtitle: "Cập nhật thông tin cá nhân" },
@@ -20,12 +22,69 @@ export default function AccountScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme(); 
+  const { wishlistIds } = useWishlist(); // 👈 Lấy danh sách ID yêu thích
+
+  const [orderCount, setOrderCount] = useState(0);
+  const [diaryCount, setDiaryCount] = useState(0);
+
+  const loadStatistics = async () => {
+    try {
+      // 1. Đếm tổng số đơn hàng
+      const ordersStr = await AsyncStorage.getItem('@orders');
+      if (ordersStr) {
+        const orders = JSON.parse(ordersStr);
+        setOrderCount(Array.isArray(orders) ? orders.length : 0);
+      }
+
+      // 2. Đếm tổng số lần soi da
+      const possibleDiaryKeys = ['@diary', '@skin_diary', '@diary_entries', '@history'];
+      let diaryDataStr = null;
+      
+      for (const key of possibleDiaryKeys) {
+        const data = await AsyncStorage.getItem(key);
+        if (data) {
+          diaryDataStr = data;
+          break;
+        }
+      }
+
+      if (diaryDataStr) {
+        const parsed = JSON.parse(diaryDataStr);
+        if (Array.isArray(parsed)) {
+          setDiaryCount(parsed.length);
+        } else if (parsed.data && Array.isArray(parsed.data)) {
+          setDiaryCount(parsed.data.length);
+        } else {
+          setDiaryCount(0);
+        }
+      } else {
+        setDiaryCount(0);
+      }
+    } catch (error) {
+      console.log("Lỗi load thống kê:", error);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStatistics();
+    }, [])
+  );
 
   const handleMenuPress = (title: string) => {
-    if (title === "Chỉnh sửa hồ sơ") { Alert.alert("Chỉnh sửa hồ sơ", "Tính năng cập nhật hồ sơ sẽ được phát triển tiếp."); return; }
+    if (title === "Chỉnh sửa hồ sơ") { router.push("/edit-profile"); return; }
     if (title === "Đơn hàng của tôi") { router.push("/orders"); return; }
-    if (title === "Sản phẩm yêu thích") { Alert.alert("Sản phẩm yêu thích", "Danh sách yêu thích sẽ được đồng bộ ở phiên bản tiếp theo."); return; }
-    Alert.alert(title, `Tính năng "${title}" sẽ được phát triển tiếp.`);
+    if (title === "Địa chỉ giao hàng") { router.push("/shipping-address"); return; }
+    if (title === "Thông báo") { router.push("/notifications"); return; }
+    if (title === "Cài đặt") { router.push("/settings"); return; }
+    
+    // 👇 CHUYỂN SANG TRANG WISHLIST
+    if (title === "Sản phẩm yêu thích") { 
+      router.push("/wishlist"); 
+      return; 
+    }
+    
+    Alert.alert(title, `Tính năng "${title}" đang được phát triển.`);
   };
 
   const handleLogout = () => {
@@ -53,7 +112,7 @@ export default function AccountScreen() {
             <Text style={dynamicStyles.logo}>Beauty<Text style={dynamicStyles.logoAccent}>Tech.</Text></Text>
             <Text style={dynamicStyles.subtitle}>YOUR PERSONAL BEAUTY SPACE</Text>
           </View>
-          <Pressable style={dynamicStyles.headerButton} onPress={() => Alert.alert("Thông báo", "Bạn chưa có thông báo mới.")}>
+          <Pressable style={dynamicStyles.headerButton} onPress={() => router.push("/notifications")}>
             <Ionicons name="notifications-outline" size={23} color={theme.primary} /><View style={dynamicStyles.notificationDot} />
           </Pressable>
         </View>
@@ -79,16 +138,29 @@ export default function AccountScreen() {
             </View>
           </View>
           <View style={dynamicStyles.profileDivider} />
+          
           <View style={dynamicStyles.statsRow}>
-            <View style={dynamicStyles.statItem}><Ionicons name="bag-handle-outline" size={20} color={theme.primary} /><Text style={dynamicStyles.statNumber}>0</Text><Text style={dynamicStyles.statLabel}>Đơn hàng</Text></View>
+            <View style={dynamicStyles.statItem}>
+              <Ionicons name="bag-handle-outline" size={20} color={theme.primary} />
+              <Text style={dynamicStyles.statNumber}>{orderCount}</Text>
+              <Text style={dynamicStyles.statLabel}>Đơn hàng</Text>
+            </View>
             <View style={dynamicStyles.statDivider} />
-            <View style={dynamicStyles.statItem}><Ionicons name="heart-outline" size={20} color={theme.primary} /><Text style={dynamicStyles.statNumber}>0</Text><Text style={dynamicStyles.statLabel}>Yêu thích</Text></View>
+            <View style={dynamicStyles.statItem}>
+              <Ionicons name="heart-outline" size={20} color={theme.primary} />
+              {/* 👇 LẤY TRỰC TIẾP TỪ CONTEXT */}
+              <Text style={dynamicStyles.statNumber}>{wishlistIds.length}</Text> 
+              <Text style={dynamicStyles.statLabel}>Yêu thích</Text>
+            </View>
             <View style={dynamicStyles.statDivider} />
-            <View style={dynamicStyles.statItem}><Ionicons name="scan-outline" size={20} color={theme.primary} /><Text style={dynamicStyles.statNumber}>0</Text><Text style={dynamicStyles.statLabel}>Lần soi da</Text></View>
+            <View style={dynamicStyles.statItem}>
+              <Ionicons name="scan-outline" size={20} color={theme.primary} />
+              <Text style={dynamicStyles.statNumber}>{diaryCount}</Text>
+              <Text style={dynamicStyles.statLabel}>Lần soi da</Text>
+            </View>
           </View>
         </View>
 
-        {/* NÚT CHUYỂN ĐỔI DARK MODE */}
         <View style={dynamicStyles.themeToggleCard}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={dynamicStyles.menuIcon}><Ionicons name={theme.isDark ? "moon" : "sunny"} size={22} color={theme.primary} /></View>
@@ -133,8 +205,23 @@ export default function AccountScreen() {
         </Pressable>
       </ScrollView>
 
-      {/* Bottom navigation */}
-            <BottomNav />
+      <View style={dynamicStyles.bottomNav}>
+        <Pressable style={dynamicStyles.navItem} onPress={() => router.replace("/home")}>
+          <Ionicons name="home-outline" size={22} color={theme.textMuted} /><Text style={dynamicStyles.navText}>Trang chủ</Text>
+        </Pressable>
+        <Pressable style={dynamicStyles.navItem} onPress={() => router.replace("/products")}>
+          <Ionicons name="grid-outline" size={22} color={theme.textMuted} /><Text style={dynamicStyles.navText}>Sản phẩm</Text>
+        </Pressable>
+        <Pressable style={dynamicStyles.navItem} onPress={() => router.replace("/chat")}>
+          <Ionicons name="chatbubbles-outline" size={22} color={theme.textMuted} /><Text style={dynamicStyles.navText}>Chat AI</Text>
+        </Pressable>
+        <Pressable style={dynamicStyles.navItem} onPress={() => router.replace("/diary")}>
+          <Ionicons name="time-outline" size={22} color={theme.textMuted} /><Text style={dynamicStyles.navText}>Nhật ký da</Text>
+        </Pressable>
+        <Pressable style={dynamicStyles.navItem}>
+          <Ionicons name="person" size={22} color={theme.primary} /><Text style={dynamicStyles.navActiveText}>Tài khoản</Text>
+        </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
@@ -170,7 +257,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   aiIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: theme.primary, alignItems: "center", justifyContent: "center" },
   aiContent: { flex: 1 },
   aiEyebrow: { fontSize: 9, fontWeight: "800", letterSpacing: 1.3, color: theme.primary },
-  aiTitle: { fontSize: 13, fontWeight: "800", color: theme.text, marginTop: 4 },
+  aiTitle: { fontSize: 13, fontWeight: '800', color: theme.text, marginTop: 4 },
   aiDescription: { fontSize: 10, color: theme.textMuted, marginTop: 4 },
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   sectionTitle: { fontSize: 16, fontWeight: "800", color: theme.text },

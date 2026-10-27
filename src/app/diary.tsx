@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
+// @ts-ignore
 import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // Dùng AsyncStorage
 import { useTheme } from '../presentation/contexts/ThemeContext';
-import BottomNav from "../presentation/components/BottomNav"; // Import BottomNav
+import BottomNav from "../presentation/components/BottomNav"; 
 
 const showConfirm = (title: string, message: string, onConfirm: () => void) => {
   if (Platform.OS === 'web') {
@@ -59,12 +60,9 @@ export default function DiaryScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen}>
-      {/* HEADER ĐÃ ĐƯỢC CĂN GIỮA */}
       <View style={dynamicStyles.header}>
         <View style={{ width: 70 }} /> 
-        
         <Text style={dynamicStyles.headerTitle}>Nhật ký da</Text>
-        
         {history.length > 0 ? (
           <Pressable style={{ width: 70, alignItems: 'flex-end' }} onPress={clearAllHistory}>
             <Text style={{ color: '#FF6B6B', fontSize: 13, fontWeight: '600' }}>Xóa tất cả</Text>
@@ -141,24 +139,20 @@ const getStyles = (theme: any) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10 },
   headerTitle: { fontSize: 20, fontWeight: '900', color: theme.text },
-  content: { padding: 20, paddingBottom: 100 }, // Thêm paddingBottom để không bị che
+  content: { padding: 20, paddingBottom: 100 },
   newScanBtn: { backgroundColor: theme.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 15, borderRadius: 15, gap: 10, marginBottom: 30 },
   newScanText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
   emptyState: { alignItems: 'center', marginTop: 50, gap: 15 },
   emptyText: { color: theme.textMuted, fontSize: 14, textAlign: 'center' },
-  
   timeline: { paddingLeft: 10 },
   timelineItem: { flexDirection: 'row', marginBottom: 20, position: 'relative' },
   timelineLine: { position: 'absolute', left: 7, top: 20, bottom: -20, width: 2, backgroundColor: theme.border },
   timelineDot: { width: 16, height: 16, borderRadius: 8, marginTop: 5, marginRight: 15, zIndex: 1, borderWidth: 3, borderColor: theme.background },
-  
   card: { flex: 1, backgroundColor: theme.card, padding: 15, borderRadius: 15, borderWidth: 1, borderColor: theme.border },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   dateText: { fontSize: 13, color: theme.textMuted, fontWeight: '700' },
-  
   deleteButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FF6B6B', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, gap: 4 },
   deleteButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-
   resultRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   conditionLabel: { fontSize: 14, color: theme.text },
   conditionValue: { fontSize: 16, fontWeight: '900' },

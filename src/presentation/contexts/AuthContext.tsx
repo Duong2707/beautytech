@@ -20,11 +20,11 @@ type AuthContextType = {
   loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   setAuthData: (user: User, token: string) => Promise<void>;
+  updateUser: (updatedUser: User) => void; // <-- THÊM DÒNG NÀY
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Khởi tạo dependency
 const authRepo = new AuthRepositoryImpl();
 const loginUseCase = new LoginUseCase(authRepo);
 const registerUseCase = new RegisterUseCase(authRepo);
@@ -63,12 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(result.user);
   };
 
-  const register = async (
-    email: string,
-    password: string,
-    fullName: string,
-    phone: string
-  ) => {
+  const register = async (email: string, password: string, fullName: string, phone: string) => {
     const result = await registerUseCase.execute(email, password, fullName, phone);
     await storage.setItem('token', result.token);
     await storage.setItem('user', JSON.stringify(result.user));
@@ -97,6 +92,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
   };
 
+   // Sửa lại hàm updateUser
+  const updateUser = async (updatedUser: User) => {
+    setUser(updatedUser);
+    // Lưu lại vào bộ nhớ máy để F5 không bị mất
+    await storage.setItem('user', JSON.stringify(updatedUser)); 
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -108,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginWithGoogle,
         logout,
         setAuthData,
+        updateUser, // <-- Thêm vào đây
       }}
     >
       {children}
