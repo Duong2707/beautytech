@@ -9,7 +9,8 @@ import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler'; 
 
 import { AuthProvider } from '../presentation/contexts/AuthContext';
-import { CartProvider } from '../presentation/contexts/CartContext'; // <-- Thêm CartProvider
+import { CartProvider } from '../presentation/contexts/CartContext';
+import { ThemeProvider } from '../presentation/contexts/ThemeContext'; // <-- Đảm bảo có dòng này
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -25,9 +26,10 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        {/* Bọc CartProvider vào trong AuthProvider */}
-        <CartProvider> 
-          <Stack screenOptions={{ headerShown: false }} />
+        <CartProvider>
+          <ThemeProvider> {/* <-- BỌC THÊM THẺ NÀY VÀO ĐÂY */}
+            <Stack screenOptions={{ headerShown: false }} />
+          </ThemeProvider>
         </CartProvider>
       </AuthProvider>
     </GestureHandlerRootView>

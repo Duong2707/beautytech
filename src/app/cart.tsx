@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, Image, ScrollView, SafeAreaView, Ale
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../presentation/contexts/CartContext';
+import { useTheme } from '../presentation/contexts/ThemeContext';
 
 const showConfirm = (title: string, message: string, onConfirm: () => void) => {
   if (Platform.OS === 'web') {
@@ -18,6 +19,7 @@ const showConfirm = (title: string, message: string, onConfirm: () => void) => {
 export default function CartScreen() {
   const router = useRouter();
   const { cart, removeSelectedFromCart, clearCart, updateQuantity, toggleSelect, toggleSelectAll } = useCart();
+  const { theme } = useTheme();
 
   const selectedItems = cart.filter(item => item.selected);
   const totalPrice = selectedItems.reduce((sum, item) => sum + (item.priceValue * item.quantity), 0);
@@ -34,72 +36,72 @@ export default function CartScreen() {
     showConfirm('Xóa tất cả', 'Bạn có chắc chắn muốn xóa toàn bộ giỏ hàng?', () => clearCart());
   };
 
+  const dynamicStyles = getStyles(theme);
+
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/home')}>
-          <Ionicons name="chevron-back" size={24} color="#49313C" />
+    <SafeAreaView style={dynamicStyles.screen}>
+      <View style={dynamicStyles.header}>
+        <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/home')}>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>Giỏ hàng</Text>
-        {/* Đã bỏ nút Xóa tất cả ở đây để tránh trùng lặp */}
+        <Text style={dynamicStyles.headerTitle}>Giỏ hàng</Text>
         <View style={{ width: 40 }} />
       </View>
 
       {cart.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="cart-outline" size={80} color="#E8D5DC" />
-          <Text style={styles.emptyText}>Giỏ hàng của bạn đang trống</Text>
-          <Pressable style={styles.shopNowBtn} onPress={() => router.replace('/products')}>
-            <Text style={styles.shopNowText}>Mua sắm ngay</Text>
+        <View style={dynamicStyles.emptyState}>
+          <Ionicons name="cart-outline" size={80} color={theme.isDark ? '#333' : '#E8D5DC'} />
+          <Text style={dynamicStyles.emptyText}>Giỏ hàng của bạn đang trống</Text>
+          <Pressable style={dynamicStyles.shopNowBtn} onPress={() => router.replace('/products')}>
+            <Text style={dynamicStyles.shopNowText}>Mua sắm ngay</Text>
           </Pressable>
         </View>
       ) : (
         <>
-          <ScrollView contentContainerStyle={styles.content}>
-            <View style={styles.selectAllRow}>
-              <Pressable style={styles.checkbox} onPress={() => toggleSelectAll(!isAllSelected)}>
-                <Ionicons name={isAllSelected ? "checkbox" : "square-outline"} size={24} color={isAllSelected ? "#BC6280" : "#8A6C78"} />
-                <Text style={styles.selectAllText}>Chọn tất cả ({cart.length})</Text>
+          <ScrollView contentContainerStyle={dynamicStyles.content}>
+            <View style={dynamicStyles.selectAllRow}>
+              <Pressable style={dynamicStyles.checkbox} onPress={() => toggleSelectAll(!isAllSelected)}>
+                <Ionicons name={isAllSelected ? "checkbox" : "square-outline"} size={24} color={isAllSelected ? theme.primary : theme.textMuted} />
+                <Text style={dynamicStyles.selectAllText}>Chọn tất cả ({cart.length})</Text>
               </Pressable>
               
-              {/* LOGIC MỚI: Hiển thị nút Xóa thông minh */}
               {isAllSelected ? (
-                <Pressable onPress={handleClearAll} style={styles.deleteActionBtn}>
+                <Pressable onPress={handleClearAll} style={dynamicStyles.deleteActionBtn}>
                   <Ionicons name="trash" size={16} color="#FF6B6B" />
-                  <Text style={styles.deleteActionText}>Xóa tất cả</Text>
+                  <Text style={dynamicStyles.deleteActionText}>Xóa tất cả</Text>
                 </Pressable>
               ) : selectedItems.length > 0 ? (
-                <Pressable onPress={handleDeleteSelected} style={styles.deleteActionBtn}>
+                <Pressable onPress={handleDeleteSelected} style={dynamicStyles.deleteActionBtn}>
                   <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
-                  <Text style={styles.deleteActionText}>Xóa ({selectedItems.length})</Text>
+                  <Text style={dynamicStyles.deleteActionText}>Xóa ({selectedItems.length})</Text>
                 </Pressable>
               ) : null}
             </View>
 
             {cart.map((item) => (
-              <View key={item.id} style={styles.cartItem}>
-                <Pressable style={styles.itemCheckbox} onPress={() => toggleSelect(item.id)}>
-                  <Ionicons name={item.selected ? "checkbox" : "square-outline"} size={22} color={item.selected ? "#BC6280" : "#8A6C78"} />
+              <View key={item.id} style={dynamicStyles.cartItem}>
+                <Pressable style={dynamicStyles.itemCheckbox} onPress={() => toggleSelect(item.id)}>
+                  <Ionicons name={item.selected ? "checkbox" : "square-outline"} size={22} color={item.selected ? theme.primary : theme.textMuted} />
                 </Pressable>
 
-                <Image source={{ uri: item.image }} style={styles.itemImage} />
+                <Image source={{ uri: item.image }} style={dynamicStyles.itemImage} />
                 
-                <View style={styles.itemInfo}>
-                  <View style={styles.itemHeader}>
-                    <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                <View style={dynamicStyles.itemInfo}>
+                  <View style={dynamicStyles.itemHeader}>
+                    <Text style={dynamicStyles.itemName} numberOfLines={1}>{item.name}</Text>
                   </View>
                   
-                  {item.size ? <Text style={styles.itemSize}>Phân loại: {item.size}</Text> : null}
+                  {item.size ? <Text style={dynamicStyles.itemSize}>Phân loại: {item.size}</Text> : null}
                   
-                  <View style={styles.bottomRow}>
-                    <Text style={styles.itemPrice}>{item.price}</Text>
-                    <View style={styles.quantityContainer}>
-                      <Pressable style={styles.qtyBtn} onPress={() => updateQuantity(item.id, item.quantity - 1)}>
-                        <Ionicons name="remove" size={16} color="#49313C" />
+                  <View style={dynamicStyles.bottomRow}>
+                    <Text style={dynamicStyles.itemPrice}>{item.price}</Text>
+                    <View style={dynamicStyles.quantityContainer}>
+                      <Pressable style={dynamicStyles.qtyBtn} onPress={() => updateQuantity(item.id, item.quantity - 1)}>
+                        <Ionicons name="remove" size={16} color={theme.text} />
                       </Pressable>
-                      <Text style={styles.qtyText}>{item.quantity}</Text>
-                      <Pressable style={styles.qtyBtn} onPress={() => updateQuantity(item.id, item.quantity + 1)}>
-                        <Ionicons name="add" size={16} color="#49313C" />
+                      <Text style={dynamicStyles.qtyText}>{item.quantity}</Text>
+                      <Pressable style={dynamicStyles.qtyBtn} onPress={() => updateQuantity(item.id, item.quantity + 1)}>
+                        <Ionicons name="add" size={16} color={theme.text} />
                       </Pressable>
                     </View>
                   </View>
@@ -108,17 +110,17 @@ export default function CartScreen() {
             ))}
           </ScrollView>
 
-          <View style={styles.bottomBar}>
-            <View style={styles.totalContainer}>
-              <Text style={styles.totalLabel}>Tổng thanh toán:</Text>
-              <Text style={styles.totalPrice}>{formatPrice(totalPrice)}</Text>
+          <View style={dynamicStyles.bottomBar}>
+            <View style={dynamicStyles.totalContainer}>
+              <Text style={dynamicStyles.totalLabel}>Tổng thanh toán:</Text>
+              <Text style={dynamicStyles.totalPrice}>{formatPrice(totalPrice)}</Text>
             </View>
-                       <Pressable 
-              style={[styles.checkoutBtn, selectedItems.length === 0 && { opacity: 0.5 }]} 
+            <Pressable 
+              style={[dynamicStyles.checkoutBtn, selectedItems.length === 0 && { opacity: 0.5 }]} 
               disabled={selectedItems.length === 0}
-              onPress={() => router.push('/checkout')} // <-- Sửa dòng này
+              onPress={() => router.push('/checkout')}
             >
-              <Text style={styles.checkoutText}>Mua hàng ({selectedItems.length})</Text>
+              <Text style={dynamicStyles.checkoutText}>Mua hàng ({selectedItems.length})</Text>
             </Pressable>
           </View>
         </>
@@ -127,43 +129,37 @@ export default function CartScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#FFFAF8' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15, backgroundColor: '#FFFAF8' },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F8EDF0', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#49313C' },
-  
+const getStyles = (theme: any) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: theme.background },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15, backgroundColor: theme.background },
+  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.isDark ? '#2A2A2A' : '#F8EDF0', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { fontSize: 16, color: '#8A6C78', marginTop: 15, marginBottom: 20 },
-  shopNowBtn: { backgroundColor: '#BC6280', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
+  emptyText: { fontSize: 16, color: theme.textMuted, marginTop: 15, marginBottom: 20 },
+  shopNowBtn: { backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
   shopNowText: { color: '#FFF', fontWeight: '700', fontSize: 15 },
-  
   content: { padding: 20, paddingBottom: 100 },
-  selectAllRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F0DDE4' },
+  selectAllRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
   checkbox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  selectAllText: { fontSize: 14, fontWeight: '600', color: '#49313C' },
-  
-  // Style cho nút Xóa thông minh
-  deleteActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF0F0', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  selectAllText: { fontSize: 14, fontWeight: '600', color: theme.text },
+  deleteActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.isDark ? '#331111' : '#FFF0F0', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
   deleteActionText: { color: '#FF6B6B', fontSize: 13, fontWeight: '700' },
-  
-  cartItem: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 15, padding: 12, marginBottom: 15, borderWidth: 1, borderColor: '#F0DDE4', alignItems: 'center' },
+  cartItem: { flexDirection: 'row', backgroundColor: theme.card, borderRadius: 15, padding: 12, marginBottom: 15, borderWidth: 1, borderColor: theme.border, alignItems: 'center' },
   itemCheckbox: { marginRight: 10 },
-  itemImage: { width: 80, height: 80, borderRadius: 10, backgroundColor: '#F5ECEF' },
+  itemImage: { width: 80, height: 80, borderRadius: 10, backgroundColor: theme.isDark ? '#333' : '#F5ECEF' },
   itemInfo: { flex: 1, marginLeft: 12 },
   itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  itemName: { fontSize: 14, fontWeight: '700', color: '#49313C', flex: 1, marginRight: 10 },
-  itemSize: { fontSize: 12, color: '#8A6C78', marginTop: 4 },
+  itemName: { fontSize: 14, fontWeight: '700', color: theme.text, flex: 1, marginRight: 10 },
+  itemSize: { fontSize: 12, color: theme.textMuted, marginTop: 4 },
   bottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 8 },
-  itemPrice: { fontSize: 15, fontWeight: '800', color: '#BC6280' },
-  quantityContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9F9F9', borderRadius: 8, borderWidth: 1, borderColor: '#EEE' },
+  itemPrice: { fontSize: 15, fontWeight: '800', color: theme.primary },
+  quantityContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.background, borderRadius: 8, borderWidth: 1, borderColor: theme.border },
   qtyBtn: { paddingHorizontal: 8, paddingVertical: 4 },
-  qtyText: { fontSize: 14, fontWeight: '700', color: '#49313C', width: 25, textAlign: 'center' },
-  
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', backgroundColor: '#FFF', padding: 20, paddingBottom: Platform.OS === 'ios' ? 30 : 20, borderTopWidth: 1, borderTopColor: '#F0DDE4', alignItems: 'center', justifyContent: 'space-between' },
+  qtyText: { fontSize: 14, fontWeight: '700', color: theme.text, width: 25, textAlign: 'center' },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', backgroundColor: theme.card, padding: 20, paddingBottom: Platform.OS === 'ios' ? 30 : 20, borderTopWidth: 1, borderTopColor: theme.border, alignItems: 'center', justifyContent: 'space-between' },
   totalContainer: { flex: 1 },
-  totalLabel: { fontSize: 13, color: '#8A6C78' },
-  totalPrice: { fontSize: 20, fontWeight: '900', color: '#BC6280', marginTop: 4 },
-  checkoutBtn: { backgroundColor: '#BC6280', paddingHorizontal: 25, paddingVertical: 14, borderRadius: 12 },
+  totalLabel: { fontSize: 13, color: theme.textMuted },
+  totalPrice: { fontSize: 20, fontWeight: '900', color: theme.primary, marginTop: 4 },
+  checkoutBtn: { backgroundColor: theme.primary, paddingHorizontal: 25, paddingVertical: 14, borderRadius: 12 },
   checkoutText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
 });
