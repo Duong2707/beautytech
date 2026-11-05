@@ -31,6 +31,7 @@ export default function WishlistScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen}>
+      <View style={{paddingTop: 30}} /> 
       <View style={dynamicStyles.header}>
         <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/account')}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />

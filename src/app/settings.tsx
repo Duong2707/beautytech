@@ -5,9 +5,12 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../presentation/contexts/ThemeContext';
+import { useAuth } from '../presentation/contexts/AuthContext'; // 👈 Import Auth
+import api from '../data/datasources/remote/api';
 
 export default function SettingsScreen() {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth(); // 👈 Lấy user để lấy token và hàm logout
   
   // Mặc định ban đầu là bật (true)
   const [promoNotif, setPromoNotif] = useState(true);
@@ -40,12 +43,32 @@ export default function SettingsScreen() {
     await AsyncStorage.setItem('@setting_order_notif', value.toString());
   };
 
+  // 3. HÀM XỬ LÝ XÓA TÀI KHOẢN
   const handleDeleteAccount = () => {
-    const performDelete = () => {
-      if (Platform.OS === 'web') {
-        window.alert("Tài khoản của bạn đã được yêu cầu xóa. (Tính năng đang phát triển)");
-      } else {
-        Alert.alert("Thông báo", "Tài khoản của bạn đã được yêu cầu xóa.");
+    const performDelete = async () => {
+      try {
+        const res = await fetch('/api/users/profile', {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${user?.token || 'fake_token'}`
+          }
+        });
+
+        if (res.ok) {
+          if (Platform.OS === 'web') {
+            window.alert("Tài khoản của bạn đã được xóa vĩnh viễn.");
+          } else {
+            Alert.alert("Thông báo", "Tài khoản của bạn đã được xóa vĩnh viễn.");
+          }
+          
+          await logout(); // Đăng xuất khỏi app
+          router.replace('/login'); // Về trang đăng nhập
+        } else {
+          const data = await res.json();
+          Alert.alert("Lỗi", data.message || "Không thể xóa tài khoản lúc này.");
+        }
+      } catch (error) {
+        Alert.alert("Lỗi", "Lỗi kết nối server.");
       }
     };
 
@@ -69,6 +92,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen}>
+      <View style={{paddingTop: 30}} /> 
       <View style={dynamicStyles.header}>
         <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/account')}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
@@ -118,7 +142,7 @@ export default function SettingsScreen() {
             <Text style={dynamicStyles.rowText}>Thông báo khuyến mãi</Text>
             <Switch 
               value={promoNotif} 
-              onValueChange={handleTogglePromo} // Đã nối hàm lưu
+              onValueChange={handleTogglePromo}
               trackColor={{ false: "#E0E0E0", true: "#BC6280" }}
               thumbColor={Platform.OS === 'android' ? "#FFF" : ""}
             />
@@ -131,7 +155,7 @@ export default function SettingsScreen() {
             <Text style={dynamicStyles.rowText}>Thông báo đơn hàng</Text>
             <Switch 
               value={orderNotif} 
-              onValueChange={handleToggleOrder} // Đã nối hàm lưu
+              onValueChange={handleToggleOrder}
               trackColor={{ false: "#E0E0E0", true: "#BC6280" }}
               thumbColor={Platform.OS === 'android' ? "#FFF" : ""}
             />

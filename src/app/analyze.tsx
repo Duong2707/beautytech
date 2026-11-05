@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Image, Alert, ActivityIndicator, ScrollView, Modal, Platform } from 'react-native';
+import {
+  View, Text, StyleSheet, Pressable, Image, Alert, ActivityIndicator, Modal, Platform
+} from 'react-native';
+// @ts-ignore
+import { ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // Thêm lại AsyncStorage
 import { useCart } from '../presentation/contexts/CartContext'; 
 import { useTheme } from '../presentation/contexts/ThemeContext';
+import { useAuth } from '../presentation/contexts/AuthContext'; 
+import { createDiaryApi } from '../services/diaryApi'; 
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
 
@@ -21,6 +26,7 @@ export default function AnalyzeScreen() {
   const router = useRouter();
   const { addToCart } = useCart(); 
   const { theme } = useTheme();
+  const { user } = useAuth(); 
   
   const { surveySkinType, surveyConcerns, surveyAge, surveyRoutine, surveyBudget } = useLocalSearchParams<{ 
     surveySkinType?: string, surveyConcerns?: string, surveyAge?: string, surveyRoutine?: string, surveyBudget?: string 
@@ -29,20 +35,49 @@ export default function AnalyzeScreen() {
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  
   const [isSaved, setIsSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // 🌟 Thêm state kiểm soát trạng thái đang lưu
 
   const [usageModalVisible, setUsageModalVisible] = useState(false);
   const [currentUsage, setCurrentUsage] = useState('');
   const [cartModalVisible, setCartModalVisible] = useState(false);
 
+  // 📸 HÀM CHỤP ẢNH TRỰC TIẾP
+  const takePhoto = async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (permissionResult.granted === false) { 
+      Alert.alert('Quyền truy cập', 'Bạn cần cấp quyền truy cập camera để chụp ảnh.'); 
+      return; 
+    }
+    const pickerResult = await ImagePicker.launchCameraAsync({ 
+      allowsEditing: true, 
+      aspect: [1, 1], 
+      quality: 0.8 
+    });
+    if (!pickerResult.canceled) { 
+      setImage(pickerResult.assets[0].uri); 
+      setResult(null); 
+      setIsSaved(false); 
+    }
+  };
+
+  // 🖼️ HÀM CHỌN ẢNH TỪ THƯ VIỆN
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) { Alert.alert('Quyền truy cập', 'Bạn cần cấp quyền truy cập thư viện ảnh.'); return; }
+    if (permissionResult.granted === false) { 
+      Alert.alert('Quyền truy cập', 'Bạn cần cấp quyền truy cập thư viện ảnh.'); 
+      return; 
+    }
     const pickerResult = await ImagePicker.launchImageLibraryAsync({ 
       mediaTypes: ImagePicker.MediaTypeOptions.Images, 
       allowsEditing: true, aspect: [1, 1], quality: 0.8 
     });
-    if (!pickerResult.canceled) { setImage(pickerResult.assets[0].uri); setResult(null); setIsSaved(false); }
+    if (!pickerResult.canceled) { 
+      setImage(pickerResult.assets[0].uri); 
+      setResult(null); 
+      setIsSaved(false); 
+    }
   };
 
   const handleAnalyze = async () => {
@@ -87,30 +122,41 @@ export default function AnalyzeScreen() {
     setCartModalVisible(true);
   };
 
-  // ĐÃ SỬA: Quay lại dùng AsyncStorage
+  // 🌟 CẬP NHẬT HÀM LƯU: THÊM CHỐNG SPAM & TRẠNG THÁI CHỜ
   const saveToDiary = async () => {
-    if (isSaved) return; 
+    // Nếu đã lưu thành công hoặc đang trong quá trình lưu thì không làm gì cả
+    if (isSaved || isSaving) return; 
+    
+    setIsSaving(true); // Bật trạng thái đang lưu
+
     try {
-      const newEntry = {
-        id: Date.now().toString(), 
-        date: new Date().toISOString(), 
+      const diaryData = {
         skinCondition: result.data.skinCondition, 
         confidence: result.data.confidence,
-        survey: { type: surveySkinType, concerns: surveyConcerns, age: surveyAge, routine: surveyRoutine, budget: surveyBudget }
+        survey: { 
+          type: surveySkinType, 
+          concerns: surveyConcerns, 
+          age: surveyAge, 
+          routine: surveyRoutine, 
+          budget: surveyBudget 
+        }
       };
-      const existingData = await AsyncStorage.getItem('@skin_diary');
-      const history = existingData ? JSON.parse(existingData) : [];
-      history.unshift(newEntry); 
-      await AsyncStorage.setItem('@skin_diary', JSON.stringify(history));
-      setIsSaved(true);
+
+      const res = await createDiaryApi(diaryData);
       
-      if (Platform.OS === 'web') {
-        window.alert("Đã lưu kết quả vào Nhật ký da!");
-      } else {
-        Alert.alert("Thành công", "Đã lưu kết quả vào Nhật ký da!");
+      if (res.success) {
+        setIsSaved(true);
+        if (Platform.OS === 'web') {
+          window.alert("Đã lưu kết quả vào Nhật ký da!");
+        } else {
+          Alert.alert("Thành công", "Đã lưu kết quả vào Nhật ký da!");
+        }
       }
     } catch (error) { 
-      Alert.alert('Lỗi', 'Không thể lưu dữ liệu.'); 
+      Alert.alert('Lỗi', 'Không thể lưu dữ liệu vào Database.'); 
+      console.log(error);
+    } finally {
+      setIsSaving(false); // Luôn tắt trạng thái chờ dù thành công hay thất bại
     }
   };
 
@@ -130,11 +176,29 @@ export default function AnalyzeScreen() {
         <Text style={dynamicStyles.title}>Tải ảnh lên để phân tích</Text>
         <Text style={dynamicStyles.subtitle}>Chụp rõ khuôn mặt, không đeo kính, ánh sáng tốt.</Text>
 
-        <Pressable style={dynamicStyles.imagePicker} onPress={pickImage}>
-          {image ? <Image source={{ uri: image }} style={dynamicStyles.image} /> : (
-            <View style={dynamicStyles.placeholder}><Ionicons name="camera-outline" size={50} color={theme.primary} /><Text style={dynamicStyles.placeholderText}>Bấm để chọn ảnh</Text></View>
+        {/* KHUNG HIỂN THỊ ẢNH */}
+        <View style={dynamicStyles.imagePicker}>
+          {image ? (
+            <Image source={{ uri: image }} style={dynamicStyles.image} />
+          ) : (
+            <View style={dynamicStyles.placeholder}>
+              <Ionicons name="camera-outline" size={50} color={theme.primary} />
+              <Text style={dynamicStyles.placeholderText}>Chưa có ảnh nào được chọn</Text>
+            </View>
           )}
-        </Pressable>
+        </View>
+
+        {/* CÁC NÚT CHỌN ẢNH */}
+        <View style={dynamicStyles.actionRow}>
+          <Pressable style={[dynamicStyles.chooseBtn, { backgroundColor: theme.primary }]} onPress={takePhoto}>
+            <Ionicons name="camera" size={20} color="#FFFFFF" />
+            <Text style={dynamicStyles.chooseBtnText}>Chụp ảnh</Text>
+          </Pressable>
+          <Pressable style={[dynamicStyles.chooseBtn, { backgroundColor: theme.isDark ? '#333' : '#F0F0F0' }]} onPress={pickImage}>
+            <Ionicons name="image" size={20} color={theme.isDark ? "#FFF" : "#333"} />
+            <Text style={[dynamicStyles.chooseBtnText, { color: theme.isDark ? "#FFF" : "#333" }]}>Thư viện</Text>
+          </Pressable>
+        </View>
 
         <Pressable style={[dynamicStyles.analyzeButton, (!image || loading) && { opacity: 0.5 }]} onPress={handleAnalyze} disabled={!image || loading}>
           {loading ? <ActivityIndicator color="#FFFFFF" /> : (<><Ionicons name="scan-outline" size={20} color="#FFFFFF" /><Text style={dynamicStyles.analyzeButtonText}>Bắt đầu phân tích</Text></>)}
@@ -192,10 +256,30 @@ export default function AnalyzeScreen() {
               <View style={{ marginTop: 10, alignItems: 'center' }}><Text style={{ color: theme.textMuted, fontStyle: 'italic', textAlign: 'center' }}>Không tìm thấy sản phẩm phù hợp với ngân sách của bạn.</Text></View>
             )}
 
+            {/* 🌟 CẬP NHẬT NÚT LƯU VỚI TRẠNG THÁI LOADING */}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-              <Pressable style={[dynamicStyles.saveDiaryButton, isSaved && dynamicStyles.saveDiaryButtonSaved]} onPress={saveToDiary} disabled={isSaved}>
-                <Ionicons name={isSaved ? "checkmark-circle" : "bookmark-outline"} size={20} color={isSaved ? "#49313C" : "#FFFFFF"} />
-                <Text style={[dynamicStyles.saveDiaryText, isSaved && { color: '#49313C' }]}>{isSaved ? "Đã lưu vào Nhật ký" : "Lưu vào Nhật ký da"}</Text>
+              <Pressable 
+                style={[
+                  dynamicStyles.saveDiaryButton, 
+                  isSaved && dynamicStyles.saveDiaryButtonSaved,
+                  isSaving && { opacity: 0.7 } // Làm mờ nút khi đang lưu
+                ]} 
+                onPress={saveToDiary} 
+                disabled={isSaved || isSaving} // Vô hiệu hóa nếu đang lưu hoặc đã lưu
+              >
+                {isSaving ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={dynamicStyles.saveDiaryText}>Đang lưu...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name={isSaved ? "checkmark-circle" : "bookmark-outline"} size={20} color={isSaved ? "#49313C" : "#FFFFFF"} />
+                    <Text style={[dynamicStyles.saveDiaryText, isSaved && { color: '#49313C' }]}>
+                      {isSaved ? "Đã lưu vào Nhật ký" : "Lưu vào Nhật ký da"}
+                    </Text>
+                  </>
+                )}
               </Pressable>
               {isSaved && (<Pressable style={dynamicStyles.viewDiaryButton} onPress={() => router.replace('/diary')}><Ionicons name="arrow-forward" size={20} color="#FFFFFF" /></Pressable>)}
             </View>
@@ -250,12 +334,19 @@ const getStyles = (theme: any) => StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 50, alignItems: 'center' },
   title: { fontSize: 22, fontWeight: '900', color: theme.primary, marginTop: 10, marginBottom: 10, textAlign: 'center' },
   subtitle: { fontSize: 13, color: theme.textMuted, lineHeight: 20, textAlign: 'center', marginBottom: 30 },
-  imagePicker: { width: '100%', height: 300, backgroundColor: theme.card, borderRadius: 20, borderWidth: 2, borderColor: theme.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: 30 },
+  
+  imagePicker: { width: '100%', height: 300, backgroundColor: theme.card, borderRadius: 20, borderWidth: 2, borderColor: theme.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: 20 },
   image: { width: '100%', height: '100%', resizeMode: 'cover' },
   placeholder: { alignItems: 'center', gap: 10 },
   placeholderText: { color: theme.primary, fontWeight: '700', fontSize: 14 },
+
+  actionRow: { flexDirection: 'row', width: '100%', gap: 10, marginBottom: 20 },
+  chooseBtn: { flex: 1, flexDirection: 'row', height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  chooseBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+
   analyzeButton: { backgroundColor: theme.primary, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, width: '100%', borderRadius: 15, gap: 10, marginBottom: 20 },
   analyzeButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  
   resultContainer: { width: '100%', backgroundColor: theme.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: theme.border },
   resultHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 15 },
   resultTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
@@ -278,7 +369,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   productName: { fontSize: 15, fontWeight: '800', color: theme.text, marginBottom: 4 },
   productDetail: { fontSize: 12, color: theme.textMuted, marginBottom: 6 },
   productPrice: { fontSize: 15, fontWeight: '900', color: theme.primary },
-  actionRow: { flexDirection: 'row', gap: 10 },
+  
   usageButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.isDark ? '#442A32' : '#FCE6EE', paddingVertical: 10, borderRadius: 10, gap: 5 },
   usageButtonText: { fontSize: 13, fontWeight: '700', color: theme.primary },
   addToCartButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary, paddingVertical: 10, borderRadius: 10, gap: 5 },

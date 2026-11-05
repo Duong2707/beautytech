@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 // @ts-ignore
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Modal, TextInput, ActivityIndicator, Alert, Pressable, Platform, KeyboardAvoidingView } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../presentation/contexts/AuthContext'; 
 import { fetchAddresses, createAddress, updateAddress, deleteAddress } from '../services/addressApi';
@@ -16,7 +16,7 @@ interface Address {
 
 export default function ShippingAddressScreen() {
   const { user } = useAuth(); 
-  const token = user?.token || "fake_token"; 
+  const { selectMode } = useLocalSearchParams(); // Kiểm tra xem có phải đang ở chế độ chọn địa chỉ không
 
   const [addresses, setAddresses] = useState<Address[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
@@ -28,27 +28,20 @@ export default function ShippingAddressScreen() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const data = await fetchAddresses(token);
+      const data = await fetchAddresses();
       setAddresses(data);
     } catch (error) {
-      // Bỏ qua lỗi
+      Alert.alert("Lỗi", "Không thể tải danh sách địa chỉ");
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // 👇 HÀM XỬ LÝ NÚT BACK AN TOÀN CHO CẢ WEB VÀ MOBILE
-  const handleGoBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/account'); // Quay về trang tài khoản nếu không có lịch sử
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const openForm = (item: Address | null = null) => {
     if (item) {
@@ -68,9 +61,9 @@ export default function ShippingAddressScreen() {
     }
     try {
       if (editingId) {
-        await updateAddress(token, editingId, formData);
+        await updateAddress(editingId, formData);
       } else {
-        await createAddress(token, formData);
+        await createAddress(formData);
       }
       setModalVisible(false);
       loadData(); 
@@ -83,7 +76,7 @@ export default function ShippingAddressScreen() {
   const handleDelete = (id: string) => {
     const performDelete = async () => {
       try {
-        await deleteAddress(token, id);
+        await deleteAddress(id);
         loadData();
       } catch (error) {
         Alert.alert("Lỗi", "Không thể xóa địa chỉ");
@@ -91,9 +84,7 @@ export default function ShippingAddressScreen() {
     };
 
     if (Platform.OS === 'web') {
-      if (window.confirm("Bạn có chắc muốn xóa địa chỉ này?")) {
-        performDelete();
-      }
+      if (window.confirm("Bạn có chắc muốn xóa địa chỉ này?")) performDelete();
     } else {
       Alert.alert("Xác nhận", "Bạn có chắc muốn xóa địa chỉ này?", [
         { text: "Hủy", style: "cancel" },
@@ -106,105 +97,102 @@ export default function ShippingAddressScreen() {
     setFormData((prev) => ({ ...prev, isDefault: !prev.isDefault }));
   };
 
+  // 👇 HÀM XỬ LÝ KHI BẤM CHỌN ĐỊA CHỈ (CHỈ DÙNG KHI CÓ SELECT_MODE)
+  const handleSelectAddress = async (item: Address) => {
+    try {
+      // Cập nhật địa chỉ này thành mặc định
+      await updateAddress(item._id, { ...item, isDefault: true });
+      // Quay lại trang thanh toán
+      router.back();
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể chọn địa chỉ này.");
+    }
+  };
+
+  const dynamicStyles = getStyles();
+
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
+    <SafeAreaView style={dynamicStyles.container}>
+      <View style={{paddingTop: 30}} /> 
+      <View style={dynamicStyles.header}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/account')} style={dynamicStyles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Địa chỉ giao hàng</Text>
-        <View style={{ width: 40 }} /> 
+        <Text style={dynamicStyles.headerTitle}>Địa chỉ giao hàng</Text>
+        <View style={{ width: 24 }} /> 
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={dynamicStyles.scrollContent}>
         {isLoading ? (
           <ActivityIndicator size="large" color="#E91E63" style={{ marginTop: 50 }} />
         ) : addresses.length === 0 ? (
           <Text style={{ textAlign: 'center', marginTop: 50, color: '#666' }}>Chưa có địa chỉ nào.</Text>
         ) : (
           addresses.map((item: Address) => (
-            <View key={item._id} style={styles.addressCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.namePhoneContainer}>
-                  <Text style={styles.nameText}>{item.name}</Text>
-                  <Text style={styles.phoneText}>| {item.phone}</Text>
+            <Pressable 
+              key={item._id} 
+              style={dynamicStyles.addressCard}
+              onPress={() => { if (selectMode) handleSelectAddress(item); }}
+            >
+              <View style={dynamicStyles.cardHeader}>
+                <View style={dynamicStyles.namePhoneContainer}>
+                  <Text style={dynamicStyles.nameText}>{item.name}</Text>
+                  <Text style={dynamicStyles.phoneText}>| {item.phone}</Text>
                 </View>
                 {item.isDefault && (
-                  <View style={styles.defaultBadge}>
-                    <Text style={styles.defaultText}>Mặc định</Text>
+                  <View style={dynamicStyles.defaultBadge}>
+                    <Text style={dynamicStyles.defaultText}>Mặc định</Text>
                   </View>
                 )}
               </View>
 
-              <Text style={styles.addressText}>{item.address}</Text>
+              <Text style={dynamicStyles.addressText}>{item.address}</Text>
               
-              <View style={styles.divider} />
+              <View style={dynamicStyles.divider} />
 
-              <View style={styles.cardActions}>
-                <TouchableOpacity style={styles.actionButton} onPress={() => openForm(item)}>
+              <View style={dynamicStyles.cardActions}>
+                <TouchableOpacity style={dynamicStyles.actionButton} onPress={() => openForm(item)}>
                   <Ionicons name="pencil-outline" size={18} color="#E91E63" />
-                  <Text style={styles.actionText}>Sửa</Text>
+                  <Text style={dynamicStyles.actionText}>Sửa</Text>
                 </TouchableOpacity>
                 {!item.isDefault && (
-                  <TouchableOpacity style={styles.actionButton} onPress={() => handleDelete(item._id)}>
+                  <TouchableOpacity style={dynamicStyles.actionButton} onPress={() => handleDelete(item._id)}>
                     <Ionicons name="trash-outline" size={18} color="#E91E63" />
-                    <Text style={styles.actionText}>Xóa</Text>
+                    <Text style={dynamicStyles.actionText}>Xóa</Text>
                   </TouchableOpacity>
                 )}
               </View>
-            </View>
+            </Pressable>
           ))
         )}
 
-        <TouchableOpacity style={styles.addButton} onPress={() => openForm()}>
+        <TouchableOpacity style={dynamicStyles.addButton} onPress={() => openForm()}>
           <Ionicons name="add" size={20} color="#E91E63" />
-          <Text style={styles.addButtonText}>Thêm địa chỉ mới</Text>
+          <Text style={dynamicStyles.addButtonText}>Thêm địa chỉ mới</Text>
         </TouchableOpacity>
       </ScrollView>
 
+      {/* MODAL THÊM / SỬA ĐỊA CHỈ */}
       <Modal visible={isModalVisible} animationType="slide" transparent={true}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{editingId ? "Sửa địa chỉ" : "Thêm địa chỉ mới"}</Text>
+          <View style={dynamicStyles.modalOverlay}>
+            <View style={dynamicStyles.modalContent}>
+              <Text style={dynamicStyles.modalTitle}>{editingId ? "Sửa địa chỉ" : "Thêm địa chỉ mới"}</Text>
               
-              <TextInput 
-                style={styles.input} 
-                placeholder="Họ và tên" 
-                value={formData.name}
-                onChangeText={(text) => setFormData({...formData, name: text})}
-              />
-              <TextInput 
-                style={styles.input} 
-                placeholder="Số điện thoại" 
-                keyboardType="phone-pad"
-                value={formData.phone}
-                onChangeText={(text) => setFormData({...formData, phone: text})}
-              />
-              <TextInput 
-                style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
-                placeholder="Địa chỉ chi tiết (Số nhà, đường, phường, quận...)" 
-                multiline
-                value={formData.address}
-                onChangeText={(text) => setFormData({...formData, address: text})}
-              />
+              <TextInput style={dynamicStyles.input} placeholder="Họ và tên" value={formData.name} onChangeText={(text) => setFormData({...formData, name: text})} />
+              <TextInput style={dynamicStyles.input} placeholder="Số điện thoại" keyboardType="phone-pad" value={formData.phone} onChangeText={(text) => setFormData({...formData, phone: text})} />
+              <TextInput style={[dynamicStyles.input, { height: 80, textAlignVertical: 'top' }]} placeholder="Địa chỉ chi tiết..." multiline value={formData.address} onChangeText={(text) => setFormData({...formData, address: text})} />
 
-              <Pressable style={styles.checkboxRow} onPress={toggleDefault}>
-                <Ionicons 
-                  name={formData.isDefault ? "checkbox" : "square-outline"} 
-                  size={26} 
-                  color={formData.isDefault ? "#E91E63" : "#888"} 
-                />
-                <Text style={{ marginLeft: 10, color: '#333', fontSize: 15 }}>
-                  Đặt làm địa chỉ mặc định
-                </Text>
+              <Pressable style={dynamicStyles.checkboxRow} onPress={toggleDefault}>
+                <Ionicons name={formData.isDefault ? "checkbox" : "square-outline"} size={26} color={formData.isDefault ? "#E91E63" : "#888"} />
+                <Text style={{ marginLeft: 10, color: '#333', fontSize: 15 }}>Đặt làm địa chỉ mặc định</Text>
               </Pressable>
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#EEE' }]} onPress={() => setModalVisible(false)}>
+              <View style={dynamicStyles.modalActions}>
+                <TouchableOpacity style={[dynamicStyles.modalBtn, { backgroundColor: '#EEE' }]} onPress={() => setModalVisible(false)}>
                   <Text style={{ color: '#333', fontWeight: 'bold' }}>Hủy bỏ</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalBtn, { backgroundColor: '#E91E63' }]} onPress={handleSave}>
+                <TouchableOpacity style={[dynamicStyles.modalBtn, { backgroundColor: '#E91E63' }]} onPress={handleSave}>
                   <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Lưu</Text>
                 </TouchableOpacity>
               </View>
@@ -216,10 +204,10 @@ export default function ShippingAddressScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = () => StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAFAFA' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#EEE' },
-  backButton: { padding: 10, marginLeft: -10 }, // Tăng vùng bấm cho nút Back
+  backButton: { padding: 10, marginLeft: -10 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   scrollContent: { padding: 16, paddingBottom: 40 },
   addressCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#EEE' },

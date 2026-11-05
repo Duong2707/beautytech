@@ -1,127 +1,106 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User } from '../../domain/entities/User';
-import { AuthRepositoryImpl } from '../../data/repositories/AuthRepositoryImpl';
-import { LoginUseCase } from '../../domain/usecases/auth/LoginUseCase';
-import { RegisterUseCase } from '../../domain/usecases/auth/RegisterUseCase';
-import { LogoutUseCase } from '../../domain/usecases/auth/LogoutUseCase';
-import { storage } from '../../data/datasources/local/storage';
+import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../../data/datasources/remote/api';
 
 type AuthContextType = {
-  user: User | null;
-  token: string | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (
-    email: string,
-    password: string,
-    fullName: string,
-    phone: string
-  ) => Promise<void>;
-  loginWithGoogle: (idToken: string) => Promise<void>;
+  user: any;
+  loading: boolean;
+  // 🌟 SỬA TẠI ĐÂY: Thêm isAdminMode (không bắt buộc)
+  login: (email: string, password: string, isAdminMode?: boolean) => Promise<any>;
+  register: (email: string, password: string, fullName?: string, phone?: string) => Promise<any>;
   logout: () => Promise<void>;
-  setAuthData: (user: User, token: string) => Promise<void>;
-  updateUser: (updatedUser: User) => void; // <-- THÊM DÒNG NÀY
+  updateUser: (data: any) => void;
+  setAuthData: (userData: any, token: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const authRepo = new AuthRepositoryImpl();
-const loginUseCase = new LoginUseCase(authRepo);
-const registerUseCase = new RegisterUseCase(authRepo);
-const logoutUseCase = new LogoutUseCase(authRepo);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
+  // Tự động load lại thông tin user khi mở app
   useEffect(() => {
-    const loadToken = async () => {
+    const loadUser = async () => {
       try {
-        const savedToken = await authRepo.getToken();
-        const savedUser = await authRepo.getCurrentUser();
-
-        if (savedToken && savedUser) {
-          setToken(savedToken);
-          setUser(savedUser);
+        const storedUser = await AsyncStorage.getItem('@user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
         }
-      } catch (e) {
-        console.log('Load token error:', e);
+      } catch (error) {
+        console.log("Lỗi load user:", error);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
-
-    loadToken();
+    loadUser();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const result = await loginUseCase.execute(email, password);
-    await storage.setItem('token', result.token);
-    await storage.setItem('user', JSON.stringify(result.user));
-    setToken(result.token);
-    setUser(result.user);
+  // 🌟 SỬA TẠI ĐÂY: Nhận thêm isAdminMode và truyền xuống API
+  const login = async (email: string, password: string, isAdminMode: boolean = false) => {
+    const res = await api.post('/api/auth/login', { 
+      email, 
+      password, 
+      isAdminMode // 👈 Gửi cờ này xuống Backend
+    });
+    
+    if (res.data.success) {
+      const userData = res.data.data;
+      setUser(userData);
+      await AsyncStorage.setItem('@user', JSON.stringify(userData));
+      await AsyncStorage.setItem('@token', userData.token);
+    }
+    return res.data;
   };
 
-  const register = async (email: string, password: string, fullName: string, phone: string) => {
-    const result = await registerUseCase.execute(email, password, fullName, phone);
-    await storage.setItem('token', result.token);
-    await storage.setItem('user', JSON.stringify(result.user));
-    setToken(result.token);
-    setUser(result.user);
+  // Hàm đăng ký (Giữ nguyên)
+  const register = async (email: string, password: string, fullName?: string, phone?: string) => {
+    const res = await api.post('/api/auth/register', { 
+      email, 
+      password, 
+      fullName, 
+      phone 
+    });
+    
+    if (res.data.success) {
+      const userData = res.data.data;
+      setUser(userData);
+      await AsyncStorage.setItem('@user', JSON.stringify(userData));
+      await AsyncStorage.setItem('@token', userData.token);
+    }
+    return res.data;
   };
 
-  const loginWithGoogle = async (idToken: string) => {
-    const result = await authRepo.loginWithGoogle(idToken);
-    await storage.setItem('token', result.token);
-    await storage.setItem('user', JSON.stringify(result.user));
-    setToken(result.token);
-    setUser(result.user);
+  // Hàm dùng cho Đăng nhập Google (Firebase)
+  const setAuthData = async (userData: any, token: string) => {
+    setUser(userData);
+    await AsyncStorage.setItem('@user', JSON.stringify(userData));
+    await AsyncStorage.setItem('@token', token);
   };
 
+  // Hàm đăng xuất
   const logout = async () => {
-    await logoutUseCase.execute();
-    setToken(null);
     setUser(null);
+    await AsyncStorage.removeItem('@user');
+    await AsyncStorage.removeItem('@token');
   };
 
-  const setAuthData = async (newUser: User, newToken: string) => {
-    await storage.setItem('token', newToken);
-    await storage.setItem('user', JSON.stringify(newUser));
-    setToken(newToken);
+  // Hàm cập nhật thông tin user (dùng cho Edit Profile)
+  const updateUser = async (data: any) => {
+    const newUser = { ...user, ...data };
     setUser(newUser);
-  };
-
-   // Sửa lại hàm updateUser
-  const updateUser = async (updatedUser: User) => {
-    setUser(updatedUser);
-    // Lưu lại vào bộ nhớ máy để F5 không bị mất
-    await storage.setItem('user', JSON.stringify(updatedUser)); 
+    await AsyncStorage.setItem('@user', JSON.stringify(newUser));
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isLoading,
-        login,
-        register,
-        loginWithGoogle,
-        logout,
-        setAuthData,
-        updateUser, // <-- Thêm vào đây
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, setAuthData }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth phải dùng trong AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
-}
+};

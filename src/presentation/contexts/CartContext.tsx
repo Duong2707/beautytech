@@ -82,10 +82,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // 👇 ĐÃ TỐI ƯU LẠI HÀM NÀY
+  // Xóa các sản phẩm đã chọn
   const removeSelectedFromCart = async () => {
-    const selectedItems = cart.filter(item => item.selected);
-    for (const item of selectedItems) {
-      await removeFromCart(item._id);
+    try {
+      const selectedItems = cart.filter(item => item.selected);
+      if (selectedItems.length === 0) return;
+
+      // 👇 SỬA TẠI ĐÂY: Dùng vòng lặp for để xóa tuần tự, tránh xung đột MongoDB
+      for (const item of selectedItems) {
+        await api.delete(`/api/cart/remove/${item._id}`);
+      }
+      
+      // Sau khi xóa xong tất cả thì load lại giỏ hàng
+      await fetchCart();
+      
+    } catch (error) {
+      console.log("Lỗi khi xóa sản phẩm đã chọn:", error);
+      Alert.alert('Lỗi', 'Không thể xóa các sản phẩm đã chọn.');
     }
   };
 

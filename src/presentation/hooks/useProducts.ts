@@ -1,31 +1,33 @@
 import { useState, useEffect } from 'react';
-import { Product } from '../../domain/entities/Product';
-import { ProductRepositoryImpl } from '../../data/repositories/ProductRepositoryImpl';
+import api from '../../data/datasources/remote/api';
 
-const productRepo = new ProductRepositoryImpl();
-
-export function useProducts() {
-  const [products, setProducts] = useState<Product[]>([]);
+export const useProducts = () => {
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        // Gọi thẳng API lấy sản phẩm từ MongoDB
+        const res = await api.get('/api/products');
+        
+        // Tùy thuộc vào cấu trúc Backend trả về mà chọn dòng phù hợp:
+        // Nếu Backend trả về { success: true, data: [...] } thì dùng res.data.data
+        // Nếu trả về mảng trực tiếp [...] thì dùng res.data
+        const data = res.data.data || res.data; 
+        setProducts(data);
+      } catch (err: any) {
+        console.error("Lỗi tải sản phẩm:", err);
+        setError(err.message || 'Lỗi kết nối API');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const data = await productRepo.getAll();
-      setProducts(data);
-      setError(null);
-    } catch (err: any) {
-      console.error('Fetch products error:', err);
-      setError(err.message || 'Không thể tải sản phẩm');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return { products, loading, error, refresh: fetchProducts };
-}
+  return { products, loading, error };
+};

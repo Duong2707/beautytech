@@ -3,8 +3,9 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // Dùng AsyncStorage
 import { useTheme } from '../presentation/contexts/ThemeContext';
+import { useAuth } from '../presentation/contexts/AuthContext'; 
+import { fetchDiariesApi, deleteDiaryApi, clearDiaryApi } from '../services/diaryApi'; 
 import BottomNav from "../presentation/components/BottomNav"; 
 
 const showConfirm = (title: string, message: string, onConfirm: () => void) => {
@@ -21,19 +22,30 @@ const showConfirm = (title: string, message: string, onConfirm: () => void) => {
 export default function DiaryScreen() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { user } = useAuth(); // Vẫn giữ user ở đây để useEffect tự load lại khi đăng nhập/xuất
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       loadHistory();
-    }, [])
+    }, [user]) // Khi user thay đổi, tự động gọi lại loadHistory
   );
 
+  // 👇 LẤY DỮ LIỆU TỪ API (Đã bỏ token)
   const loadHistory = async () => {
     try {
-      const data = await AsyncStorage.getItem('@skin_diary');
-      if (data) setHistory(JSON.parse(data));
+      setLoading(true);
+      const res = await fetchDiariesApi(); // ✅ Bỏ token
+      if (res.success) {
+        // Map _id của Mongo thành id để khớp với giao diện
+        const formatted = res.data.map((item: any) => ({
+          ...item,
+          id: item._id,
+          date: item.date || item.createdAt // Đảm bảo có ngày
+        }));
+        setHistory(formatted);
+      }
     } catch (e) {
       console.log('Lỗi đọc nhật ký', e);
     } finally {
@@ -41,18 +53,27 @@ export default function DiaryScreen() {
     }
   };
 
+  // 👇 XÓA TOÀN BỘ QUA API (Đã bỏ token)
   const clearAllHistory = () => {
     showConfirm('Xóa tất cả', 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử nhật ký da?', async () => {
-      await AsyncStorage.removeItem('@skin_diary');
-      setHistory([]);
+      try {
+        await clearDiaryApi(); // ✅ Bỏ token
+        setHistory([]);
+      } catch (error) {
+        Alert.alert('Lỗi', 'Không thể xóa toàn bộ nhật ký.');
+      }
     });
   };
 
+  // 👇 XÓA TỪNG BẢN GHI QUA API (Đã bỏ token)
   const deleteEntry = (id: string) => {
     showConfirm('Xóa bản ghi', 'Bạn có chắc chắn muốn xóa kết quả quét da này không?', async () => {
-      const newHistory = history.filter(item => item.id !== id);
-      setHistory(newHistory);
-      await AsyncStorage.setItem('@skin_diary', JSON.stringify(newHistory));
+      try {
+        await deleteDiaryApi(id); // ✅ Bỏ token, chỉ truyền id
+        loadHistory(); // Tải lại danh sách sau khi xóa
+      } catch (error) {
+        Alert.alert('Lỗi', 'Không thể xóa bản ghi này.');
+      }
     });
   };
 
@@ -60,8 +81,9 @@ export default function DiaryScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen}>
+      <View style={{ width: 70, paddingTop: 30}} /> 
       <View style={dynamicStyles.header}>
-        <View style={{ width: 70 }} /> 
+        <View style={{ width: 70}} /> 
         <Text style={dynamicStyles.headerTitle}>Nhật ký da</Text>
         {history.length > 0 ? (
           <Pressable style={{ width: 70, alignItems: 'flex-end' }} onPress={clearAllHistory}>
@@ -117,7 +139,7 @@ export default function DiaryScreen() {
                       <Text style={[dynamicStyles.conditionValue, { color: isAcne ? '#FF6B6B' : '#4CAF50' }]}>
                         {isAcne ? 'Da mụn' : 'Da thường'}
                       </Text>
-                      <Text style={dynamicStyles.confidence}>({Math.round(item.confidence * 100)}%)</Text>
+                      <Text style={dynamicStyles.confidence}>({Math.round((item.confidence || 0) * 100)}%)</Text>
                     </View>
                     <Text style={dynamicStyles.surveySummary}>
                       Loại da: {item.survey?.type || 'N/A'} | Tuổi: {item.survey?.age || 'N/A'}

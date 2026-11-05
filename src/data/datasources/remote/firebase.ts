@@ -1,6 +1,11 @@
 // src/services/firebase.ts
+// @ts-ignore
+// src/data/datasources/remote/firebase.ts
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+// @ts-ignore
+import { getAuth, initializeAuth, getReactNativePersistence, GoogleAuthProvider, Auth } from 'firebase/auth';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -17,7 +22,19 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Khởi tạo Auth và Google Provider
-export const auth = getAuth(app);
+// 👇 SỬA TẠI ĐÂY: Phân biệt môi trường Web và Native
+let auth: Auth; 
+if (Platform.OS === 'web') {
+  // Trên Web: Firebase tự động dùng IndexedDB, không cần AsyncStorage
+  auth = getAuth(app);
+} else {
+  // Trên Native (điện thoại): Dùng AsyncStorage để duy trì đăng nhập
+  auth = initializeAuth(app, {
+    // @ts-ignore (Bỏ qua lỗi type nếu có)
+    persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+  });
+}
+
+export { auth };
 export const googleProvider = new GoogleAuthProvider();
 

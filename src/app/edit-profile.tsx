@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, Alert, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+// @ts-ignore
+import { ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,14 +52,15 @@ export default function EditProfileScreen() {
         newPassword: isChangingPass ? newPassword : undefined
       };
 
+      // Gọi API cập nhật (đảm bảo Backend của bạn có route PUT /api/auth/profile)
       const res = await api.put('/api/auth/profile', payload);
       
       if (res.data.success) {
-        updateUser(res.data.data);
+        updateUser(res.data.data); // Cập nhật lại Context để giao diện thay đổi ngay
         showAlert('Thành công', 'Cập nhật hồ sơ thành công!', () => router.back());
       }
     } catch (error: any) {
-      // In lỗi ra màn hình rõ ràng
+      // Bắt lỗi chi tiết từ Backend trả về
       const msg = error.response?.data?.message || error.message || 'Lỗi không xác định';
       showAlert('Lỗi cập nhật', msg);
     } finally {
@@ -65,7 +68,7 @@ export default function EditProfileScreen() {
     }
   };
 
-  // Hàm hỗ trợ hiển thị thông báo trên cả Web và Mobile
+  // Hàm hiển thị thông báo hỗ trợ cả Web và Mobile
   const showAlert = (title: string, message: string, onOk?: () => void) => {
     if (Platform.OS === 'web') {
       window.alert(`${title}: ${message}`);
@@ -80,7 +83,7 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/account')}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Chỉnh sửa hồ sơ</Text>

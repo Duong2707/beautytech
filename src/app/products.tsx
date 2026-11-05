@@ -3,7 +3,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 // @ts-ignore
-import { Alert, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Modal, Platform, ActivityIndicator } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Modal, Platform, ActivityIndicator } from "react-native";
+import { StatusBar } from 'expo-status-bar'; 
 import { useCart } from "../presentation/contexts/CartContext";
 import { useTheme } from "../presentation/contexts/ThemeContext";
 import { useAuth } from "../presentation/contexts/AuthContext";
@@ -12,6 +13,8 @@ import BottomNav from "../presentation/components/BottomNav";
 import { useProducts } from "../presentation/hooks/useProducts"; 
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
+
+const brands = ["Tất cả", "BeautyTech", "Cerave", "Cetaphil", "La Roche-Posay", "Klairs", "The Ordinary", "Obagi", "Innisfree", "Simple", "Bioderma", "Hada Labo", "L'Oreal"];
 
 export default function ProductsScreen() {
   const router = useRouter();
@@ -23,6 +26,12 @@ export default function ProductsScreen() {
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
+  
+  const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [priceFilter, setPriceFilter] = useState<'all' | 'under200' | '200to300' | 'above300'>('all');
+  const [brandFilter, setBrandFilter] = useState<string>('Tất cả');
+  const [ratingFilter, setRatingFilter] = useState<number>(0); 
+
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [tempQuantity, setTempQuantity] = useState(1);
@@ -40,8 +49,10 @@ export default function ProductsScreen() {
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     const keyword = search.trim().toLowerCase();
+    
     return products.filter((product: any) => {
       const matchesSearch = !keyword || `${product.name} ${product.brand}`.toLowerCase().includes(keyword);
+      
       let matchesCategory = true;
       if (selectedCategory !== "Tất cả") {
         if (selectedCategory === "Làm sạch") matchesCategory = product.category === "cleanser";
@@ -49,9 +60,28 @@ export default function ProductsScreen() {
         else if (selectedCategory === "Dưỡng ẩm") matchesCategory = product.category === "moisturizer";
         else if (selectedCategory === "Chống nắng") matchesCategory = product.category === "sunscreen";
       }
-      return matchesSearch && matchesCategory;
+
+      let matchesPrice = true;
+      if (priceFilter === 'under200') matchesPrice = product.price < 200000;
+      else if (priceFilter === '200to300') matchesPrice = product.price >= 200000 && product.price <= 300000;
+      else if (priceFilter === 'above300') matchesPrice = product.price > 300000;
+
+      const matchesBrand = brandFilter === 'Tất cả' || product.brand === brandFilter;
+
+      const productRating = Number(product.rating) || 0;
+      const matchesRating = productRating >= ratingFilter;
+
+      return matchesSearch && matchesCategory && matchesPrice && matchesBrand && matchesRating;
     });
-  }, [products, search, selectedCategory]);
+  }, [products, search, selectedCategory, priceFilter, brandFilter, ratingFilter]);
+
+  const resetFilters = () => {
+    setPriceFilter('all');
+    setBrandFilter('Tất cả');
+    setRatingFilter(0);
+    setSelectedCategory("Tất cả");
+    setSearch("");
+  };
 
   const handleOpenAddModal = (product: any) => {
     setSelectedProduct(product);
@@ -71,7 +101,8 @@ export default function ProductsScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen} edges={["top", "left", "right"]}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
+      
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={dynamicStyles.scrollContent}>
         
         <View style={dynamicStyles.header}>
@@ -82,40 +113,32 @@ export default function ProductsScreen() {
           </Pressable>
         </View>
 
-        <View style={dynamicStyles.searchBox}>
-          <Ionicons name="search-outline" size={21} color={theme.textMuted} />
-          <TextInput value={search} onChangeText={setSearch} placeholder="Tìm sản phẩm..." placeholderTextColor={theme.textMuted} style={dynamicStyles.searchInput} />
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+          <View style={[dynamicStyles.searchBox, { flex: 1, marginBottom: 0 }]}>
+            <Ionicons name="search-outline" size={21} color={theme.textMuted} />
+            <TextInput value={search} onChangeText={setSearch} placeholder="Tìm sản phẩm..." placeholderTextColor={theme.textMuted} style={dynamicStyles.searchInput} />
+          </View>
+          <Pressable style={dynamicStyles.filterButton} onPress={() => setIsFilterModalVisible(true)}>
+            <Ionicons name="options-outline" size={22} color="#FFF" />
+          </Pressable>
         </View>
 
         {loading ? (
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 50 }} />
         ) : error ? (
           <Text style={{ color: 'red', textAlign: 'center', marginTop: 20 }}>Lỗi kết nối API: {error}</Text>
+        ) : filteredProducts.length === 0 ? (
+          <Text style={{ textAlign: 'center', color: theme.textMuted, marginTop: 30 }}>Không tìm thấy sản phẩm nào phù hợp.</Text>
         ) : (
           <View style={dynamicStyles.productGrid}>
             {filteredProducts.map((product: any) => {
-              // 👇 Lấy biến boolean 1 lần duy nhất cho cả màu và icon
               const isFav = wishlistIds.includes(product._id);
-              
               return (
-                <Pressable 
-                  key={product._id} 
-                  style={dynamicStyles.productCard} 
-                  onPress={() => router.push({ pathname: "/product-detail", params: { id: product._id } })}
-                >
+                <Pressable key={product._id} style={dynamicStyles.productCard} onPress={() => router.push({ pathname: "/product-detail", params: { id: product._id } })}>
                   <View style={[dynamicStyles.productImageWrap, { backgroundColor: theme.isDark ? '#333' : '#F9F9F9' }]}>
                     <Image source={{ uri: product.image || FALLBACK_IMAGE }} style={dynamicStyles.productImage} resizeMode="cover" />
-                    
-                    <Pressable 
-                      style={dynamicStyles.favoriteBtn} 
-                      onPress={(e) => handleToggleWishlist(e, product._id)}
-                    >
-                      <Ionicons 
-                        key={isFav ? "filled" : "outline"}
-                        name={isFav ? "heart" : "heart-outline"} 
-                        size={20} 
-                        color={isFav ? "#E91E63" : "#555"} 
-                      />
+                    <Pressable style={dynamicStyles.favoriteBtn} onPress={(e) => handleToggleWishlist(e, product._id)}>
+                      <Ionicons key={isFav ? "filled" : "outline"} name={isFav ? "heart" : "heart-outline"} size={20} color={isFav ? "#E91E63" : "#555"} />
                     </Pressable>
                   </View>
                   
@@ -142,6 +165,60 @@ export default function ProductsScreen() {
 
       <BottomNav />
 
+      {/* MODAL BỘ LỌC */}
+      <Modal visible={isFilterModalVisible} transparent={true} animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: theme.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '80%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 20, fontWeight: '900', color: theme.text }}>Bộ lọc sản phẩm</Text>
+              <Pressable onPress={() => setIsFilterModalVisible(false)}><Ionicons name="close" size={24} color={theme.text} /></Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text, marginBottom: 10 }}>Mức giá:</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 25 }}>
+                <Pressable style={[dynamicStyles.filterChip, priceFilter === 'all' && dynamicStyles.filterChipActive]} onPress={() => setPriceFilter('all')}><Text style={[dynamicStyles.filterChipText, priceFilter === 'all' && dynamicStyles.filterChipTextActive]}>Tất cả</Text></Pressable>
+                <Pressable style={[dynamicStyles.filterChip, priceFilter === 'under200' && dynamicStyles.filterChipActive]} onPress={() => setPriceFilter('under200')}><Text style={[dynamicStyles.filterChipText, priceFilter === 'under200' && dynamicStyles.filterChipTextActive]}>Dưới 200k</Text></Pressable>
+                <Pressable style={[dynamicStyles.filterChip, priceFilter === '200to300' && dynamicStyles.filterChipActive]} onPress={() => setPriceFilter('200to300')}><Text style={[dynamicStyles.filterChipText, priceFilter === '200to300' && dynamicStyles.filterChipTextActive]}>200k - 300k</Text></Pressable>
+                <Pressable style={[dynamicStyles.filterChip, priceFilter === 'above300' && dynamicStyles.filterChipActive]} onPress={() => setPriceFilter('above300')}><Text style={[dynamicStyles.filterChipText, priceFilter === 'above300' && dynamicStyles.filterChipTextActive]}>Trên 300k</Text></Pressable>
+              </View>
+
+              <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text, marginBottom: 10 }}>Thương hiệu:</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 25 }}>
+                {brands.map(brand => (
+                  <Pressable key={brand} style={[dynamicStyles.filterChip, brandFilter === brand && dynamicStyles.filterChipActive]} onPress={() => setBrandFilter(brand)}>
+                    <Text style={[dynamicStyles.filterChipText, brandFilter === brand && dynamicStyles.filterChipTextActive]}>{brand}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text, marginBottom: 10 }}>Đánh giá:</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 30 }}>
+                <Pressable style={[dynamicStyles.filterChip, ratingFilter === 0 && dynamicStyles.filterChipActive]} onPress={() => setRatingFilter(0)}>
+                  <Text style={[dynamicStyles.filterChipText, ratingFilter === 0 && dynamicStyles.filterChipTextActive]}>Tất cả</Text>
+                </Pressable>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <Pressable key={star} style={[dynamicStyles.filterChip, ratingFilter === star && dynamicStyles.filterChipActive, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => setRatingFilter(star)}>
+                    <Text style={[dynamicStyles.filterChipText, ratingFilter === star && dynamicStyles.filterChipTextActive]}>{star}</Text>
+                    <Ionicons name="star" size={14} color={ratingFilter === star ? theme.primary : "#FFC107"} />
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 15, marginTop: 10 }}>
+              <Pressable style={{ flex: 1, paddingVertical: 15, borderRadius: 12, borderWidth: 1, borderColor: theme.border, alignItems: 'center' }} onPress={resetFilters}>
+                <Text style={{ color: theme.textMuted, fontWeight: '700', fontSize: 15 }}>Xóa bộ lọc</Text>
+              </Pressable>
+              <Pressable style={{ flex: 2, backgroundColor: theme.primary, paddingVertical: 15, borderRadius: 12, alignItems: 'center' }} onPress={() => setIsFilterModalVisible(false)}>
+                <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 15 }}>Áp dụng</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL CHỌN SIZE/SỐ LƯỢNG */}
       <Modal visible={modalVisible} transparent={true} animationType="fade">
         <View style={dynamicStyles.modalOverlay}>
           <View style={dynamicStyles.modalContent}>
@@ -153,9 +230,7 @@ export default function ProductsScreen() {
               <>
                 <View style={dynamicStyles.modalProductInfo}>
                   <Image source={{ uri: selectedProduct.image || FALLBACK_IMAGE }} style={dynamicStyles.modalImage} />
-                  <View style={dynamicStyles.modalTextInfo}>
-                    <Text style={dynamicStyles.modalPrice}>{selectedProduct.price.toLocaleString('vi-VN')}đ</Text>
-                  </View>
+                  <View style={dynamicStyles.modalTextInfo}><Text style={dynamicStyles.modalPrice}>{selectedProduct.price.toLocaleString('vi-VN')}đ</Text></View>
                 </View>
                 <Text style={dynamicStyles.modalLabel}>Phân loại (Dung tích):</Text>
                 <View style={dynamicStyles.modalSizeRow}>
@@ -194,22 +269,17 @@ const getStyles = (theme: any) => StyleSheet.create({
   cartButton: { width: 45, height: 45, borderRadius: 16, backgroundColor: theme.isDark ? '#2A2A2A' : "#F9E9EE", justifyContent: "center", alignItems: "center" },
   cartBadge: { position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: theme.primary, justifyContent: "center", alignItems: "center" },
   cartBadgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
+  
   searchBox: { height: 49, borderRadius: 16, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 10, marginBottom: 20 },
   searchInput: { flex: 1, color: theme.text, fontSize: 13, ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : {}) },
+  filterButton: { width: 49, height: 49, backgroundColor: theme.primary, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+
   productGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 15 },
   productCard: { width: "48%", backgroundColor: theme.card, borderRadius: 18, borderWidth: 1, borderColor: theme.border, padding: 10 },
   productImageWrap: { height: 150, borderRadius: 13, overflow: "hidden", position: 'relative' },
   productImage: { width: "100%", height: "100%" },
   
-  favoriteBtn: { 
-    position: 'absolute', top: 8, right: 8, 
-    width: 32, height: 32, 
-    backgroundColor: '#FFF', 
-    borderRadius: 16, 
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3,
-    zIndex: 10 
-  },
+  favoriteBtn: { position: 'absolute', top: 8, right: 8, width: 32, height: 32, backgroundColor: '#FFF', borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 3, zIndex: 10 },
 
   productName: { fontSize: 14, fontWeight: "800", color: theme.text, marginTop: 10 },
   productBrand: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
@@ -219,6 +289,12 @@ const getStyles = (theme: any) => StyleSheet.create({
   productPrice: { fontSize: 14, fontWeight: "800", color: theme.primary, marginTop: 5, marginBottom: 10 },
   addButton: { height: 34, backgroundColor: theme.primary, borderRadius: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 },
   addButtonText: { fontSize: 11, fontWeight: "700", color: "#FFFFFF" },
+  
+  filterChip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card },
+  filterChipActive: { borderColor: theme.primary, backgroundColor: theme.isDark ? '#442A32' : '#FCE6EE' },
+  filterChipText: { fontSize: 14, color: theme.textMuted, fontWeight: '600' },
+  filterChipTextActive: { color: theme.primary, fontWeight: '800' },
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
   modalContent: { width: '90%', maxWidth: 400, backgroundColor: theme.card, borderRadius: 20, padding: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },

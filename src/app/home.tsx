@@ -1,7 +1,8 @@
 import { useMemo, useState, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Alert, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, TextInput, View, Platform, Modal, ActivityIndicator } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Platform, Modal, ActivityIndicator } from "react-native";
+import { StatusBar } from 'expo-status-bar';
 import { useCart } from "../presentation/contexts/CartContext";
 import { useTheme } from "../presentation/contexts/ThemeContext";
 import BottomNav from "../presentation/components/BottomNav"; 
@@ -50,11 +51,12 @@ export default function HomeScreen() {
   const [tempQuantity, setTempQuantity] = useState(1);
   const [tempSize, setTempSize] = useState('Mặc định');
 
-  const categoryScrollRef = useRef<ScrollView>(null);
+  const categoryScrollRef = useRef<any>(null);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     const keyword = search.trim().toLowerCase();
+    
     return products.filter((product: any) => {
       const matchesSearch = !keyword || `${product.name} ${product.description}`.toLowerCase().includes(keyword);
       
@@ -69,7 +71,8 @@ export default function HomeScreen() {
       else if (priceFilter === 'above300') matchesPrice = product.price > 300000;
 
       const matchesBrand = brandFilter === 'Tất cả' || product.brand === brandFilter;
-      const matchesRating = product.rating >= ratingFilter;
+      const productRating = Number(product.rating) || 0;
+      const matchesRating = productRating >= ratingFilter;
 
       return matchesSearch && matchesCategory && matchesPrice && matchesBrand && matchesRating;
     });
@@ -107,8 +110,7 @@ export default function HomeScreen() {
 
   return (
     <View style={dynamicStyles.screen}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
-
+      <StatusBar style={theme.isDark ? "light" : "dark"} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={dynamicStyles.scrollContent}>
         
         {/* HEADER */}
@@ -124,8 +126,12 @@ export default function HomeScreen() {
             <Pressable style={dynamicStyles.headerIcon} onPress={() => router.push('/cart')}>
               <Ionicons name="bag-handle-outline" size={21} color={theme.text} />
               {totalCartItems > 0 ? (
-                <View style={dynamicStyles.cartCount}><Text style={dynamicStyles.cartCountText}>{totalCartItems}</Text></View>
-              ) : (<View style={dynamicStyles.cartDot} />)}
+                <View style={dynamicStyles.cartCount}>
+                  <Text style={dynamicStyles.cartCountText}>{totalCartItems}</Text>
+                </View>
+              ) : (
+                <View style={dynamicStyles.cartDot} />
+              )}
             </Pressable>
           </View>
         </View>
@@ -154,29 +160,45 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <View style={dynamicStyles.heroDecoration}>
-            <View style={dynamicStyles.heroCircle}><Text style={dynamicStyles.heroEmoji}>🌷</Text></View>
-            <View style={dynamicStyles.heroSparkle}><Ionicons name="sparkles" size={20} color="#FFFFFF" /></View>
+            <View style={dynamicStyles.heroCircle}>
+              <Text style={dynamicStyles.heroEmoji}>🌷</Text>
+            </View>
+            <View style={dynamicStyles.heroSparkle}>
+              <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+            </View>
           </View>
         </View>
 
         {/* BENEFITS */}
         <View style={dynamicStyles.benefits}>
-          <View style={dynamicStyles.benefitItem}><Ionicons name="shield-checkmark-outline" size={20} color={theme.primary} /><Text style={dynamicStyles.benefitText}>Chọn lọc kỹ</Text></View>
+          <View style={dynamicStyles.benefitItem}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={theme.primary} />
+            <Text style={dynamicStyles.benefitText}>Chọn lọc kỹ</Text>
+          </View>
           <View style={dynamicStyles.benefitDivider} />
-          <View style={dynamicStyles.benefitItem}><Ionicons name="leaf-outline" size={20} color={theme.primary} /><Text style={dynamicStyles.benefitText}>Chăm da dịu nhẹ</Text></View>
+          <View style={dynamicStyles.benefitItem}>
+            <Ionicons name="leaf-outline" size={20} color={theme.primary} />
+            <Text style={dynamicStyles.benefitText}>Chăm da dịu nhẹ</Text>
+          </View>
           <View style={dynamicStyles.benefitDivider} />
-          <View style={dynamicStyles.benefitItem}><Ionicons name="heart-outline" size={20} color={theme.primary} /><Text style={dynamicStyles.benefitText}>Yêu bản thân</Text></View>
+          <View style={dynamicStyles.benefitItem}>
+            <Ionicons name="heart-outline" size={20} color={theme.primary} />
+            <Text style={dynamicStyles.benefitText}>Yêu bản thân</Text>
+          </View>
         </View>
 
         {/* CATEGORIES */}
         <View style={dynamicStyles.section}>
           <View style={dynamicStyles.sectionHeading}>
-            <View><Text style={dynamicStyles.sectionTitle}>Khám phá danh mục</Text><Text style={dynamicStyles.sectionSubtitle}>Chăm sóc làn da mỗi ngày</Text></View>
+            <View>
+              <Text style={dynamicStyles.sectionTitle}>Khám phá danh mục</Text>
+              <Text style={dynamicStyles.sectionSubtitle}>Chăm sóc làn da mỗi ngày</Text>
+            </View>
             <Pressable onPress={() => categoryScrollRef.current?.scrollToEnd({ animated: true })}>
               <Ionicons name="arrow-forward-circle-outline" size={27} color={theme.primary} />
             </Pressable>
           </View>
-          <ScrollView ref={categoryScrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={dynamicStyles.categoryList}>
+          <ScrollView ref={categoryScrollRef as any} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={dynamicStyles.categoryList}>
             {categories.map((category, index) => (
               <Pressable key={category.name} style={dynamicStyles.categoryItem} onPress={() => setSelectedCategory((current) => current === category.name ? "" : category.name)}>
                 <View style={[dynamicStyles.categoryCircle, { backgroundColor: theme.isDark ? '#2A2A2A' : ["#F7E4E9", "#F5EBDD", "#E9EDE4", "#F8E9D6"][index % 4], borderWidth: selectedCategory === category.name ? 2 : 0, borderColor: theme.primary }]}>
@@ -191,7 +213,10 @@ export default function HomeScreen() {
         {/* AI SKIN ANALYSIS */}
         <View style={dynamicStyles.aiCard}>
           <View style={dynamicStyles.aiTopRow}>
-            <View style={dynamicStyles.aiBadge}><Ionicons name="sparkles" size={13} color="#FFFFFF" /><Text style={dynamicStyles.aiBadgeText}>BEAUTYTECH AI</Text></View>
+            <View style={dynamicStyles.aiBadge}>
+              <Ionicons name="sparkles" size={13} color="#FFFFFF" />
+              <Text style={dynamicStyles.aiBadgeText}>BEAUTYTECH AI</Text>
+            </View>
             <Ionicons name="scan-outline" size={27} color={theme.primary} />
           </View>
           <Text style={dynamicStyles.aiTitle}>Làn da của bạn,{"\n"}câu chuyện của riêng bạn.</Text>
@@ -205,7 +230,10 @@ export default function HomeScreen() {
         {/* PRODUCTS */}
         <View style={dynamicStyles.section}>
           <View style={dynamicStyles.sectionHeading}>
-            <View><Text style={dynamicStyles.sectionTitle}>Được yêu thích</Text><Text style={dynamicStyles.sectionSubtitle}>Những lựa chọn dành cho bạn</Text></View>
+            <View>
+              <Text style={dynamicStyles.sectionTitle}>Được yêu thích</Text>
+              <Text style={dynamicStyles.sectionSubtitle}>Những lựa chọn dành cho bạn</Text>
+            </View>
           </View>
           
           {loading ? (
@@ -220,7 +248,9 @@ export default function HomeScreen() {
                 <Pressable key={product._id} style={dynamicStyles.productCard} onPress={() => router.push({ pathname: "/product-detail", params: { id: product._id, name: product.name, detail: product.description, price: product.price, image: product.image || FALLBACK_IMAGE, tag: product.category } })}>
                   <View style={[dynamicStyles.productImage, { backgroundColor: theme.isDark ? '#333' : '#F9F9F9' }]}>
                     <Image source={{ uri: product.image || FALLBACK_IMAGE }} style={dynamicStyles.productPhoto} resizeMode="cover" />
-                    <View style={dynamicStyles.productTag}><Text style={dynamicStyles.productTagText}>{product.brand}</Text></View>
+                    <View style={dynamicStyles.productTag}>
+                      <Text style={dynamicStyles.productTagText}>{product.brand}</Text>
+                    </View>
                   </View>
                   <View style={dynamicStyles.productInfo}>
                     <Text style={dynamicStyles.productName} numberOfLines={1}>{product.name}</Text>
@@ -229,7 +259,9 @@ export default function HomeScreen() {
                       <Text style={dynamicStyles.ratingText}>{product.rating}</Text>
                       <Text style={dynamicStyles.soldText}>({product.sold})</Text>
                     </View>
-                    <View style={dynamicStyles.priceRow}><Text style={dynamicStyles.productPrice}>{product.price.toLocaleString('vi-VN')}đ</Text></View>
+                    <View style={dynamicStyles.priceRow}>
+                      <Text style={dynamicStyles.productPrice}>{product.price.toLocaleString('vi-VN')}đ</Text>
+                    </View>
                   </View>
                 </Pressable>
               ))}
@@ -376,7 +408,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   sectionTitle: { fontSize: 19, fontWeight: "900", color: theme.text, letterSpacing: -0.4 },
   sectionSubtitle: { marginTop: 5, fontSize: 11, color: theme.textMuted },
   
-  categoryList: { paddingHorizontal: 22, gap: 380, paddingBottom: 10 },
+  categoryList: { paddingHorizontal: 22, gap: 15, paddingBottom: 10 },
   categoryItem: { width: 65, alignItems: "center", flexShrink: 0 }, 
   categoryCircle: { width: 65, height: 65, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   categoryName: { fontSize: 10, fontWeight: "700", color: theme.text, marginTop: 8, textAlign: "center" },

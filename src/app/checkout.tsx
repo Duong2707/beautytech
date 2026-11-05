@@ -1,26 +1,22 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 // @ts-ignore
 import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image, Alert, Platform, ActivityIndicator } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../presentation/contexts/CartContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
 import { useAuth } from '../presentation/contexts/AuthContext';
 import { fetchAddresses } from '../services/addressApi';
+import { createOrderApi } from '../services/orderApi';
+import api from '../data/datasources/remote/api'; // Thêm api để check thanh toán và lấy voucher
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
-
-const MOCK_VOUCHERS = [
-  { id: 'v1', code: 'NEWBIE20', title: 'Giảm 20.000đ', discount: 20000, minSpend: 0 },
-  { id: 'v2', code: 'BEAUTY50', title: 'Giảm 50.000đ', discount: 50000, minSpend: 200000 },
-  { id: 'v3', code: 'VIP100', title: 'Giảm 100.000đ', discount: 100000, minSpend: 500000 },
-];
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { cart, clearCart } = useCart();
+  const { cart, removeSelectedFromCart } = useCart();
   const { theme } = useTheme();
   const { user } = useAuth(); 
 
@@ -34,97 +30,147 @@ export default function CheckoutScreen() {
   const shippingFee = shipping === 'fast' ? 30000 : 15000;
   const [payment, setPayment] = useState<'cod' | 'qr'>('cod');
   const [isPaid, setIsPaid] = useState(false);
+  
+  // 🌟 STATE QUẢN LÝ VOUCHER TỪ DATABASE
+  const [vouchers, setVouchers] = useState<any[]>([]);
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
 
-  // 1. TỰ ĐỘNG LẤY ĐỊA CHỈ MẶC ĐỊNH TỪ DB
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [isOrderPlaced, setIsOrderPlaced] = useState(false);
+
   useEffect(() => {
-    const loadDefaultAddress = async () => {
-      try {
-        const token = user?.token || "fake_token";
-        const addresses = await fetchAddresses(token);
-        
-        if (addresses && addresses.length > 0) {
-          const defaultAddr = addresses.find((a: any) => a.isDefault) || addresses[0];
-          setCurrentAddress(defaultAddr);
-        } else {
-          setCurrentAddress({ address: 'Vui lòng thêm địa chỉ giao hàng' });
+    setCurrentOrderId('ORD' + Math.floor(Math.random() * 1000000));
+    loadVouchers(); // Load voucher khi mở trang
+  }, []);
+
+  const loadVouchers = async () => {
+    try {
+      const res = await api.get('/api/vouchers');
+      // Chỉ lấy voucher active và chưa hết hạn
+      const validVouchers = (res.data.data || res.data).filter((v: any) => 
+        v.active && new Date(v.expiry) >= new Date() && v.quantity > v.used
+      );
+      setVouchers(validVouchers);
+    } catch (error) {
+      console.log("Lỗi tải voucher:", error);
+    }
+  };
+
+  // 1. TỰ ĐỘNG LẤY ĐỊA CHỈ MẶC ĐỊNH
+  useFocusEffect(
+    useCallback(() => {
+      const loadDefaultAddress = async () => {
+        try {
+          setIsLoadingAddress(true);
+          const addresses = await fetchAddresses();
+          if (addresses && addresses.length > 0) {
+            const defaultAddr = addresses.find((a: any) => a.isDefault) || addresses[0];
+            setCurrentAddress(defaultAddr);
+          } else {
+            setCurrentAddress({ address: 'Vui lòng thêm địa chỉ giao hàng' });
+          }
+        } catch (error) {
+          console.log("Lỗi lấy địa chỉ:", error);
+          setCurrentAddress({ address: 'Lỗi tải địa chỉ' });
+        } finally {
+          setIsLoadingAddress(false);
         }
-      } catch (error) {
-        console.log("Lỗi lấy địa chỉ mặc định:", error);
-        setCurrentAddress({ address: 'Lỗi tải địa chỉ' });
-      } finally {
-        setIsLoadingAddress(false);
-      }
-    };
-
-    if (!params.selectedAddress) {
+      };
       loadDefaultAddress();
-    }
-  }, [user]);
+    }, [])
+  );
 
-  // 2. LẮNG NGHE ĐỊA CHỈ MỚI CHỌN TỪ TRANG QUẢN LÝ
-  useEffect(() => {
-    if (params.selectedAddress) {
-      const parsedAddress = JSON.parse(params.selectedAddress as string);
-      setCurrentAddress(parsedAddress);
-      setIsLoadingAddress(false);
-    }
-  }, [params.selectedAddress]);
-
-  // 3. TỰ ĐỘNG ÁP DỤNG VOUCHER (Từ URL hoặc từ AsyncStorage)
+  // 2. ÁP DỤNG VOUCHER (Từ params hoặc từ AsyncStorage)
   useEffect(() => {
     const checkAndApplyVoucher = async () => {
       let codeToApply = params.voucherCode;
-
-      // Nếu không có mã nào được gửi qua URL, tìm trong bộ nhớ tạm
       if (!codeToApply) {
         const savedCode = await AsyncStorage.getItem('@pendingVoucher');
         if (savedCode) {
           codeToApply = savedCode;
-          // Dùng xong thì xóa đi để không bị lưu cho lần mua sau
           await AsyncStorage.removeItem('@pendingVoucher');
         }
       }
-
-      if (codeToApply) {
-        const voucherToApply = MOCK_VOUCHERS.find(v => v.code === codeToApply);
-        if (voucherToApply) {
-          if (subTotal >= voucherToApply.minSpend) {
-            setAppliedVoucher(voucherToApply);
-          } else {
-            if (Platform.OS === 'web') {
-              window.alert(`Mã ${voucherToApply.code} chỉ áp dụng cho đơn từ ${voucherToApply.minSpend.toLocaleString('vi-VN')}đ`);
-            } else {
-              Alert.alert('Thông báo', `Mã ${voucherToApply.code} chỉ áp dụng cho đơn từ ${voucherToApply.minSpend.toLocaleString('vi-VN')}đ`);
-            }
-          }
+      if (codeToApply && vouchers.length > 0) {
+        const voucherToApply = vouchers.find(v => v.code === codeToApply);
+        if (voucherToApply && subTotal >= voucherToApply.minOrder) {
+          setAppliedVoucher(voucherToApply);
         }
       }
     };
-
     checkAndApplyVoucher();
-  }, [params.voucherCode, subTotal]);
+  }, [params.voucherCode, subTotal, vouchers]);
 
-  const availableVouchers = useMemo(() => MOCK_VOUCHERS.filter(v => subTotal >= v.minSpend), [subTotal]);
-  const discountAmount = appliedVoucher ? appliedVoucher.discount : 0;
+  // 3. POLLING KIỂM TRA THANH TOÁN
+  useEffect(() => {
+    let interval: any;
+    if (payment === 'qr' && !isPaid && currentOrderId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await api.get(`/api/payment/check-status/${currentOrderId}`);
+          if (res.data?.status === 'paid') {
+            setIsPaid(true); 
+            clearInterval(interval); 
+          }
+        } catch (error) {}
+      }, 3000); 
+    }
+    return () => clearInterval(interval);
+  }, [payment, isPaid, currentOrderId]);
+
+  // 4. TỰ ĐỘNG ĐẶT HÀNG KHI THANH TOÁN THÀNH CÔNG
+  useEffect(() => {
+    if (isPaid && payment === 'qr' && !isOrderPlaced) {
+      const timer = setTimeout(() => {
+        setIsOrderPlaced(true); 
+        handlePlaceOrder(true); 
+      }, 1500); 
+      return () => clearTimeout(timer);
+    }
+  }, [isPaid, payment, isOrderPlaced]);
+
+  // Lọc voucher phù hợp với đơn hàng hiện tại
+  const availableVouchers = useMemo(() => vouchers.filter(v => subTotal >= v.minOrder), [vouchers, subTotal]);
+  
+  // 🌟 TÍNH TOÁN GIẢM GIÁ THEO % HOẶC TIỀN MẶT
+  const discountAmount = useMemo(() => {
+    if (!appliedVoucher) return 0;
+    if (appliedVoucher.type === 'percent') {
+      return (subTotal * appliedVoucher.value) / 100;
+    }
+    return appliedVoucher.value;
+  }, [appliedVoucher, subTotal]);
+
   const totalPrice = Math.max(0, subTotal + shippingFee - discountAmount);
 
-  const formatPrice = (price: number) => price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
+  const formatPrice = (price: number) => Math.round(price).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
 
   const handleApplyVoucher = (voucher: any) => {
-    if (appliedVoucher?.id === voucher.id) setAppliedVoucher(null);
+    if (appliedVoucher?._id === voucher._id) setAppliedVoucher(null);
     else setAppliedVoucher(voucher);
   };
 
-  const handlePlaceOrder = async () => {
-    if (selectedItems.length === 0) { Alert.alert('Lỗi', 'Không có sản phẩm nào để thanh toán!'); return; }
+  const generateVietQRLink = () => {
+    const bankId = "BIDV"; 
+    const accountNo = "96247059776"; 
+    const accountName = "TRAN NHAT LUAN"; 
+    const amount = Math.round(totalPrice); 
+    const addInfo = currentOrderId || "Thanh toan don hang"; 
+    return `https://img.vietqr.io/image/${bankId}-${accountNo}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
+  };
+
+  const handlePlaceOrder = async (isAuto = false) => {
+    if (selectedItems.length === 0) { 
+      if (!isAuto) Alert.alert('Lỗi', 'Không có sản phẩm nào để thanh toán!'); 
+      return; 
+    }
     if (!currentAddress || currentAddress.address === 'Vui lòng thêm địa chỉ giao hàng') {
       Alert.alert('Lỗi', 'Vui lòng chọn địa chỉ giao hàng!'); return; 
     }
     
     const finalPhone = currentAddress?.phone || user?.phone;
     if (!finalPhone) { 
-      Alert.alert('Lỗi', 'Vui lòng cập nhật số điện thoại nhận hàng trong phần Hồ sơ hoặc Địa chỉ!'); 
+      Alert.alert('Lỗi', 'Vui lòng cập nhật số điện thoại nhận hàng!'); 
       return; 
     }
 
@@ -132,40 +178,45 @@ export default function CheckoutScreen() {
       const finalRecipientName = currentAddress?.name || user?.fullName || 'Khách hàng';
 
       const newOrder = {
-        id: 'ORD' + Math.floor(Math.random() * 1000000),
-        date: new Date().toISOString(),
+        orderId: currentOrderId || ('ORD' + Math.floor(Math.random() * 1000000)),
         recipientName: finalRecipientName,
         phone: finalPhone,
         items: selectedItems.map(item => ({
-          _id: item._id,
+          productId: item.product._id,
           name: item.product.name,
           price: item.product.price,
           image: item.product.image || FALLBACK_IMAGE,
           quantity: item.quantity,
           size: item.size
         })),
-        subTotal, shippingFee, discount: discountAmount, total: totalPrice,
+        subTotal: subTotal, 
+        shippingFee: shippingFee, 
+        discount: discountAmount, 
+        total: totalPrice,
         address: currentAddress.address,
         paymentMethod: payment,
         paymentStatus: payment === 'qr' ? (isPaid ? 'paid' : 'pending') : 'unpaid',
         orderStatus: 'pending',
       };
 
-      const existingOrders = await AsyncStorage.getItem('@orders');
-      const orders = existingOrders ? JSON.parse(existingOrders) : [];
-      orders.unshift(newOrder);
-      await AsyncStorage.setItem('@orders', JSON.stringify(orders));
-
-      await clearCart(); 
+      await createOrderApi(newOrder); 
+      await removeSelectedFromCart(); 
       
       if (Platform.OS === 'web') {
-        window.alert('Đặt hàng thành công! Cảm ơn bạn đã mua sắm tại BeautyTech.');
+        if (!isAuto) window.alert('Đặt hàng thành công!');
         router.replace('/home'); 
       } else {
-        Alert.alert('Đặt hàng thành công', 'Cảm ơn bạn đã mua sắm!', [{ text: 'Về trang chủ', onPress: () => router.replace('/home') }]);
+        if (!isAuto) {
+          Alert.alert('Đặt hàng thành công', 'Cảm ơn bạn đã mua sắm!', [{ text: 'Về trang chủ', onPress: () => router.replace('/home') }]);
+        } else {
+          router.replace('/home');
+        }
       }
     } catch (error) {
-      Alert.alert('Lỗi', 'Không thể tạo đơn hàng.');
+      console.error("Lỗi đặt hàng:", error);
+      if (Platform.OS === 'web') window.alert('Có lỗi xảy ra khi lưu đơn hàng, vui lòng kiểm tra Console (F12)!');
+      else Alert.alert('Lỗi', 'Không thể tạo đơn hàng.');
+      setIsOrderPlaced(false); 
     }
   };
 
@@ -183,7 +234,7 @@ export default function CheckoutScreen() {
 
       <ScrollView contentContainerStyle={dynamicStyles.content}>
         
-        {/* === PHẦN ĐỊA CHỈ GIAO HÀNG === */}
+        {/* ĐỊA CHỈ */}
         <View style={dynamicStyles.sectionCard}>
           <View style={dynamicStyles.sectionHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -217,33 +268,31 @@ export default function CheckoutScreen() {
                   {currentAddress?.address || 'Chưa có địa chỉ'}
                 </Text>
               </View>
-              {(!currentAddress?.phone && !user?.phone) && (
-                <Text style={{ fontSize: 12, color: '#FF6B6B', marginTop: 4, fontStyle: 'italic' }}>
-                  * Tài khoản chưa có SĐT. Vui lòng cập nhật trong phần Hồ sơ hoặc Địa chỉ.
-                </Text>
-              )}
             </View>
           )}
         </View>
 
+        {/* VOUCHER */}
         <View style={dynamicStyles.sectionCard}>
           <View style={dynamicStyles.sectionHeader}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="ticket" size={20} color={theme.primary} /><Text style={dynamicStyles.sectionTitle}>Mã ưu đãi</Text></View></View>
           {availableVouchers.length > 0 ? availableVouchers.map((voucher) => {
-              const isApplied = appliedVoucher?.id === voucher.id;
+              const isApplied = appliedVoucher?._id === voucher._id;
+              const title = voucher.type === 'percent' ? `Giảm ${voucher.value}%` : `Giảm ${formatPrice(voucher.value)}`;
               return (
-                <View key={voucher.id} style={[dynamicStyles.voucherRow, isApplied && dynamicStyles.voucherRowApplied]}>
+                <View key={voucher._id} style={[dynamicStyles.voucherRow, isApplied && dynamicStyles.voucherRowApplied]}>
                   <View style={dynamicStyles.voucherLeft}>
                     <View style={dynamicStyles.voucherIconBox}><Ionicons name="pricetag" size={20} color="#FFF" /></View>
-                    <View><Text style={dynamicStyles.voucherTitle}>{voucher.title}</Text><Text style={dynamicStyles.voucherCode}>Mã: {voucher.code}</Text></View>
+                    <View><Text style={dynamicStyles.voucherTitle}>{title}</Text><Text style={dynamicStyles.voucherCode}>Mã: {voucher.code}</Text></View>
                   </View>
                   <Pressable style={[dynamicStyles.applyBtn, isApplied && dynamicStyles.applyBtnActive]} onPress={() => handleApplyVoucher(voucher)}>
                     <Text style={[dynamicStyles.applyBtnText, isApplied && { color: '#4CAF50' }]}>{isApplied ? 'Đang dùng' : 'Áp dụng'}</Text>
                   </Pressable>
                 </View>
               );
-          }) : <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic' }}>Chưa có mã ưu đãi phù hợp.</Text>}
+          }) : <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic' }}>Không có mã ưu đãi phù hợp.</Text>}
         </View>
 
+        {/* VẬN CHUYỂN, THANH TOÁN, SẢN PHẨM (Giữ nguyên như cũ) */}
         <View style={dynamicStyles.sectionCard}>
           <View style={dynamicStyles.sectionHeader}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="cube" size={20} color={theme.primary} /><Text style={dynamicStyles.sectionTitle}>Phương thức vận chuyển</Text></View></View>
           <Pressable style={dynamicStyles.optionRow} onPress={() => setShipping('fast')}>
@@ -269,9 +318,19 @@ export default function CheckoutScreen() {
           {payment === 'qr' && (
             <View style={dynamicStyles.qrContainer}>
               {isPaid ? (
-                <View style={dynamicStyles.paidBox}><Ionicons name="checkmark-circle" size={50} color="#4CAF50" /><Text style={dynamicStyles.paidText}>Đã xác nhận chuyển khoản</Text></View>
+                <View style={dynamicStyles.paidBox}>
+                  <Ionicons name="checkmark-circle" size={50} color="#4CAF50" />
+                  <Text style={dynamicStyles.paidText}>Đã xác nhận chuyển khoản</Text>
+                  <Text style={{color: theme.primary, marginTop: 5, fontSize: 13}}>Đang tự động đặt hàng...</Text>
+                </View>
               ) : (
-                <><Image source={{ uri: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=BeautyTechPayment' }} style={dynamicStyles.qrImage} /><Text style={dynamicStyles.qrText}>Quét mã để thanh toán</Text><Pressable style={dynamicStyles.confirmPaidBtn} onPress={() => setIsPaid(true)}><Text style={dynamicStyles.confirmPaidText}>Tôi đã chuyển khoản</Text></Pressable></>
+                <>
+                  <Image source={{ uri: generateVietQRLink() }} style={[dynamicStyles.qrImage, { width: 250, height: 250 }]} resizeMode="contain" />
+                  <Text style={dynamicStyles.qrText}>Quét mã để thanh toán (Nội dung: {currentOrderId})</Text>
+                  <Pressable style={dynamicStyles.confirmPaidBtn} onPress={() => setIsPaid(true)}>
+                    <Text style={dynamicStyles.confirmPaidText}>Tôi đã chuyển khoản</Text>
+                  </Pressable>
+                </>
               )}
             </View>
           )}
@@ -279,7 +338,6 @@ export default function CheckoutScreen() {
 
         <View style={dynamicStyles.sectionCard}>
           <View style={dynamicStyles.sectionHeader}><Text style={dynamicStyles.sectionTitle}>Sản phẩm ({selectedItems.length})</Text></View>
-          
           {selectedItems.map((item) => (
             <View key={item._id} style={dynamicStyles.summaryItem}>
               <Image source={{ uri: item.product?.image || FALLBACK_IMAGE }} style={dynamicStyles.summaryImage} />
@@ -305,12 +363,19 @@ export default function CheckoutScreen() {
 
       <View style={dynamicStyles.bottomBar}>
         <View style={dynamicStyles.bottomPrice}><Text style={dynamicStyles.bottomPriceLabel}>Tổng cộng:</Text><Text style={dynamicStyles.bottomPriceValue}>{formatPrice(totalPrice)}</Text></View>
-        <Pressable style={[dynamicStyles.placeOrderBtn, selectedItems.length === 0 && { opacity: 0.5 }]} disabled={selectedItems.length === 0} onPress={handlePlaceOrder}><Text style={dynamicStyles.placeOrderText}>Đặt hàng</Text></Pressable>
+        <Pressable 
+          style={[dynamicStyles.placeOrderBtn, (selectedItems.length === 0 || isOrderPlaced) && { opacity: 0.5 }]} 
+          disabled={selectedItems.length === 0 || isOrderPlaced} 
+          onPress={() => handlePlaceOrder(false)}
+        >
+          <Text style={dynamicStyles.placeOrderText}>{isOrderPlaced ? 'Đang xử lý...' : 'Đặt hàng'}</Text>
+        </Pressable>
       </View>
     </SafeAreaView>
   );
 }
 
+// Giữ nguyên toàn bộ Styles cũ của bạn
 const getStyles = (theme: any) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15 },
@@ -338,7 +403,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   divider: { height: 1, backgroundColor: theme.border, marginVertical: 10 },
   qrContainer: { alignItems: 'center', marginTop: 15, padding: 15, backgroundColor: theme.background, borderRadius: 10 },
   qrImage: { width: 180, height: 180 },
-  qrText: { marginTop: 10, color: theme.textMuted, fontSize: 13, marginBottom: 15 },
+  qrText: { marginTop: 10, color: theme.textMuted, fontSize: 13, marginBottom: 15, textAlign: 'center' },
   confirmPaidBtn: { backgroundColor: theme.isDark ? '#1E3320' : '#E8F5E9', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#4CAF50' },
   confirmPaidText: { color: '#4CAF50', fontWeight: '700', fontSize: 14 },
   paidBox: { alignItems: 'center', padding: 20 },

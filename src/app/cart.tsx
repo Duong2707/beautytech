@@ -1,4 +1,5 @@
 import React from 'react';
+// @ts-ignore
 import { View, Text, StyleSheet, Pressable, Image, ScrollView, SafeAreaView, Alert, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,7 @@ export default function CartScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen}>
+      <View style={{paddingTop: 30}} /> 
       <View style={dynamicStyles.header}>
         <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/home')}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />

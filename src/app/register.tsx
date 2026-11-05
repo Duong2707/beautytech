@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  ScrollView,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +12,9 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+
+// @ts-ignore
+import { ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../presentation/contexts/AuthContext';
@@ -48,8 +50,7 @@ export default function RegisterScreen() {
       await register(email, password, '', '');
       router.replace('/home');
     } catch (error: any) {
-      const message =
-        error?.response?.data?.message || 'Đăng ký thất bại';
+      const message = error?.response?.data?.message || 'Đăng ký thất bại';
       Alert.alert('Lỗi', message);
     } finally {
       setLoading(false);
@@ -58,20 +59,9 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.container}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
 
           <Text style={styles.title}>Beauty Tech</Text>
 
@@ -107,16 +97,8 @@ export default function RegisterScreen() {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
-              <Pressable
-                onPress={() => setShowPassword(!showPassword)}
-                hitSlop={10}
-                style={styles.eyeBtn}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color="#b5b9ca"
-                />
+              <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10} style={styles.eyeBtn}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#b5b9ca" />
               </Pressable>
             </View>
           </View>
@@ -136,44 +118,19 @@ export default function RegisterScreen() {
                 secureTextEntry={!showRepeatPassword}
                 autoCapitalize="none"
               />
-              <Pressable
-                onPress={() => setShowRepeatPassword(!showRepeatPassword)}
-                hitSlop={10}
-                style={styles.eyeBtn}
-              >
-                <Ionicons
-                  name={showRepeatPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color="#b5b9ca"
-                />
+              <Pressable onPress={() => setShowRepeatPassword(!showRepeatPassword)} hitSlop={10} style={styles.eyeBtn}>
+                <Ionicons name={showRepeatPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#b5b9ca" />
               </Pressable>
             </View>
           </View>
 
-          {/* Register button */}
-          <Pressable
-            style={({ pressed }) => [
-              styles.registerBtn,
-              (pressed || loading) && { opacity: 0.7 },
-            ]}
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.registerBtnText}>REGISTER</Text>
-            )}
+          <Pressable style={({ pressed }) => [styles.registerBtn, (pressed || loading) && { opacity: 0.7 }]} onPress={handleRegister} disabled={loading}>
+            {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.registerBtnText}>REGISTER</Text>}
           </Pressable>
 
-          {/* Back to login */}
-          <Pressable
-            style={styles.loginWrap}
-            onPress={() => router.replace('/login')}
-          >
+          <Pressable style={styles.loginWrap} onPress={() => router.replace('/login')}>
             <Text style={styles.loginText}>
-              Already have an account?{' '}
-              <Text style={styles.loginLink}>LOG IN</Text>
+              Already have an account? <Text style={styles.loginLink}>LOG IN</Text>
             </Text>
           </Pressable>
         </ScrollView>
@@ -184,38 +141,12 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#ffffff' },
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
+  container: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 40, alignItems: 'center' },
   logo: { width: 147, height: 97 },
-  title: {
-    marginTop: 10,
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 40,
-    color: '#e76988',
-    textAlign: 'center',
-  },
-  inputWrapper: {
-    width: '100%',
-    marginTop: 40,
-    position: 'relative',
-  },
-  labelBox: {
-    position: 'absolute',
-    top: -7,
-    left: 26,
-    paddingHorizontal: 5,
-    backgroundColor: '#ffffff',
-    zIndex: 1,
-  },
-  label: {
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 9.2,
-    color: '#b5b9ca',
-  },
+  title: { marginTop: 10, fontFamily: 'Raleway_500Medium', fontSize: 40, color: '#e76988', textAlign: 'center' },
+  inputWrapper: { width: '100%', marginTop: 40, position: 'relative' },
+  labelBox: { position: 'absolute', top: -7, left: 26, paddingHorizontal: 5, backgroundColor: '#ffffff', zIndex: 1 },
+  label: { fontFamily: 'Raleway_500Medium', fontSize: 9.2, color: '#b5b9ca' },
   input: {
     height: 54,
     borderWidth: 1.84,
@@ -225,80 +156,23 @@ const styles = StyleSheet.create({
     fontFamily: 'Raleway_500Medium',
     fontSize: 14.7,
     color: '#2b2b32',
+    // 👇 Xóa viền đen và nền autofill của trình duyệt
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any, boxShadow: 'inset 0 0 0 1000px #ffffff', WebkitBoxShadow: 'inset 0 0 0 1000px #ffffff' } : {}),
   },
-  passwordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 54,
-    borderWidth: 1.84,
-    borderColor: '#eef4fa',
-    borderRadius: 20.23,
-    paddingRight: 16,
-  },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', height: 54, borderWidth: 1.84, borderColor: '#eef4fa', borderRadius: 20.23, paddingRight: 16 },
   passwordInput: {
     flex: 1,
     paddingHorizontal: 22,
     fontFamily: 'Raleway_800ExtraBold',
     fontSize: 14.7,
     color: '#2b2b32',
+    // 👇 Xóa viền đen và nền autofill của trình duyệt
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any, boxShadow: 'inset 0 0 0 1000px #ffffff', WebkitBoxShadow: 'inset 0 0 0 1000px #ffffff' } : {}),
   },
   eyeBtn: { padding: 4 },
-  registerBtn: {
-    width: '100%',
-    height: 57,
-    backgroundColor: '#f5809d',
-    borderRadius: 28.74,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 40,
-  },
-  registerBtnText: {
-    fontFamily: 'Raleway_600SemiBold',
-    fontSize: 16.6,
-    color: '#ffffff',
-    letterSpacing: 0.5,
-  },
-  orRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 25,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#2b2b32',
-    opacity: 0.3,
-  },
-  orText: {
-    marginHorizontal: 10,
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 11,
-    color: '#2b2b32',
-  },
-  socialRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 59,
-    width: '100%',
-    marginTop: 25,
-  },
-  socialBtn: {
-    width: 83,
-    height: 54,
-    borderRadius: 20.23,
-    borderWidth: 1.84,
-    borderColor: '#e8eaed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  socialIcon: { width: 24, height: 24 },
+  registerBtn: { width: '100%', height: 57, backgroundColor: '#f5809d', borderRadius: 28.74, alignItems: 'center', justifyContent: 'center', marginTop: 40 },
+  registerBtnText: { fontFamily: 'Raleway_600SemiBold', fontSize: 16.6, color: '#ffffff', letterSpacing: 0.5 },
   loginWrap: { marginTop: 30, alignItems: 'center' },
-  loginText: {
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 11,
-    color: '#2b2b32',
-    textAlign: 'center',
-  },
+  loginText: { fontFamily: 'Raleway_500Medium', fontSize: 11, color: '#2b2b32', textAlign: 'center' },
   loginLink: { color: '#eb557a', fontWeight: '700' },
 });

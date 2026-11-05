@@ -3,11 +3,13 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 // @ts-ignore
-import { Alert, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, View, Platform, Switch } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View, Platform, Switch } from "react-native";
+import { StatusBar } from 'expo-status-bar'; 
 import { useAuth } from "../presentation/contexts/AuthContext";
 import { useTheme } from "../presentation/contexts/ThemeContext"; 
-import { useWishlist } from "../presentation/contexts/WishlistContext"; // 👈 Thêm import
+import { useWishlist } from "../presentation/contexts/WishlistContext"; 
+import { fetchDiariesApi } from "../services/diaryApi"; 
+import { fetchOrdersApi } from "../services/orderApi";
 
 const menuItems = [
   { icon: "person-outline" as const, title: "Chỉnh sửa hồ sơ", subtitle: "Cập nhật thông tin cá nhân" },
@@ -22,44 +24,26 @@ export default function AccountScreen() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme(); 
-  const { wishlistIds } = useWishlist(); // 👈 Lấy danh sách ID yêu thích
+  const { wishlistIds } = useWishlist(); 
 
   const [orderCount, setOrderCount] = useState(0);
   const [diaryCount, setDiaryCount] = useState(0);
 
   const loadStatistics = async () => {
     try {
-      // 1. Đếm tổng số đơn hàng
-      const ordersStr = await AsyncStorage.getItem('@orders');
-      if (ordersStr) {
-        const orders = JSON.parse(ordersStr);
-        setOrderCount(Array.isArray(orders) ? orders.length : 0);
-      }
+      if (!user) return;
+      const token = user.token || 'fake_token';
 
-      // 2. Đếm tổng số lần soi da
-      const possibleDiaryKeys = ['@diary', '@skin_diary', '@diary_entries', '@history'];
-      let diaryDataStr = null;
-      
-      for (const key of possibleDiaryKeys) {
-        const data = await AsyncStorage.getItem(key);
-        if (data) {
-          diaryDataStr = data;
-          break;
-        }
-      }
+      try {
+        const ordersRes = await fetchOrdersApi();
+        if (ordersRes.success) setOrderCount(ordersRes.data.length);
+      } catch (e) {}
 
-      if (diaryDataStr) {
-        const parsed = JSON.parse(diaryDataStr);
-        if (Array.isArray(parsed)) {
-          setDiaryCount(parsed.length);
-        } else if (parsed.data && Array.isArray(parsed.data)) {
-          setDiaryCount(parsed.data.length);
-        } else {
-          setDiaryCount(0);
-        }
-      } else {
-        setDiaryCount(0);
-      }
+      try {
+        const diariesRes = await fetchDiariesApi();
+        if (diariesRes.success) setDiaryCount(diariesRes.data.length);
+      } catch (e) {}
+
     } catch (error) {
       console.log("Lỗi load thống kê:", error);
     }
@@ -68,7 +52,7 @@ export default function AccountScreen() {
   useFocusEffect(
     useCallback(() => {
       loadStatistics();
-    }, [])
+    }, [user])
   );
 
   const handleMenuPress = (title: string) => {
@@ -77,12 +61,7 @@ export default function AccountScreen() {
     if (title === "Địa chỉ giao hàng") { router.push("/shipping-address"); return; }
     if (title === "Thông báo") { router.push("/notifications"); return; }
     if (title === "Cài đặt") { router.push("/settings"); return; }
-    
-    // 👇 CHUYỂN SANG TRANG WISHLIST
-    if (title === "Sản phẩm yêu thích") { 
-      router.push("/wishlist"); 
-      return; 
-    }
+    if (title === "Sản phẩm yêu thích") { router.push("/wishlist"); return; }
     
     Alert.alert(title, `Tính năng "${title}" đang được phát triển.`);
   };
@@ -104,7 +83,7 @@ export default function AccountScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen} edges={["top", "left", "right"]}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
+      <StatusBar style={theme.isDark ? "light" : "dark"} /> 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={dynamicStyles.scrollContent}>
         
         <View style={dynamicStyles.header}>
@@ -148,7 +127,6 @@ export default function AccountScreen() {
             <View style={dynamicStyles.statDivider} />
             <View style={dynamicStyles.statItem}>
               <Ionicons name="heart-outline" size={20} color={theme.primary} />
-              {/* 👇 LẤY TRỰC TIẾP TỪ CONTEXT */}
               <Text style={dynamicStyles.statNumber}>{wishlistIds.length}</Text> 
               <Text style={dynamicStyles.statLabel}>Yêu thích</Text>
             </View>

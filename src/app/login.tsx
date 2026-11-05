@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  ScrollView,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +12,9 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+
+// @ts-ignore
+import { ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -20,12 +22,7 @@ import * as Linking from 'expo-linking';
 import { useAuth } from '../presentation/contexts/AuthContext';
 import { auth, googleProvider } from '../data/datasources/remote/firebase';
 import api from '../data/datasources/remote/api';
-
-// Firebase (chỉ dùng cho Google)
 import { signInWithPopup } from 'firebase/auth';
-
-
-
 
 const WEB_LOGIN_URL = 'https://enchanting-fox-9000a8.netlify.app';
 
@@ -37,48 +34,60 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState(false);
+  
+  const [isAdminMode, setIsAdminMode] = useState(false);
 
-  // Xử lý idToken từ Firebase (Google)
+  // 🌟 Hàm hiển thị thông báo hỗ trợ cả Web và Mobile
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
   const handleFirebaseToken = async (idToken: string) => {
     try {
       const response = await api.post('/api/auth/firebase-login', { idToken });
       const { token, ...userData } = response.data.data;
-
       await setAuthData(userData, token);
-      router.replace('/home');
+      router.replace('/home'); 
     } catch (error: any) {
-      console.error('❌ Firebase login error:', error);
-      const message =
-        error?.response?.data?.message || 'Đăng nhập thất bại';
-      Alert.alert('Lỗi', message);
+      const message = error?.response?.data?.message || 'Đăng nhập thất bại';
+      showAlert('Lỗi', message); // 👈 Đã đổi thành showAlert
     } finally {
       setSocialLoading(false);
     }
   };
 
-  // Đăng nhập email/password
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email và password');
+      showAlert('Lỗi', 'Vui lòng nhập email và password'); // 👈 Đã đổi thành showAlert
       return;
     }
-
     setLoading(true);
     try {
-      await login(email, password);
-      router.replace('/home');
+      await login(email, password, isAdminMode);
+      if (isAdminMode) {
+        router.replace('/admin'); 
+      } else {
+        router.replace('/home');  
+      }
     } catch (error: any) {
-      const message =
-        error?.response?.data?.message || 'Đăng nhập thất bại';
-      Alert.alert('Lỗi', message);
+      // Lấy câu thông báo lỗi từ Backend trả về (VD: "Email hoặc password không đúng")
+      const message = error?.response?.data?.message || 'Đăng nhập thất bại';
+      showAlert('Lỗi', message); // 👈 Đã đổi thành showAlert
     } finally {
       setLoading(false);
     }
   };
 
-  // Đăng nhập Google
   const handleGoogleLogin = async () => {
-    // Trên WEB: dùng popup Firebase
+    if (isAdminMode) {
+      showAlert('Thông báo', 'Quản trị viên vui lòng đăng nhập bằng Email/Mật khẩu!'); // 👈 Đã đổi thành showAlert
+      return;
+    }
+
     if (Platform.OS === 'web') {
       setSocialLoading(true);
       try {
@@ -86,30 +95,28 @@ export default function LoginScreen() {
         const idToken = await result.user.getIdToken();
         await handleFirebaseToken(idToken);
       } catch (error: any) {
-        console.error('❌ Web Google login error:', error);
-        Alert.alert('Lỗi', error.message || 'Đăng nhập Google thất bại');
+        showAlert('Lỗi', error.message || 'Đăng nhập Google thất bại'); // 👈 Đã đổi thành showAlert
         setSocialLoading(false);
       }
       return;
     }
-
-    // Trên MOBILE: mở web trung gian
     setSocialLoading(true);
     const redirectUrl = Linking.createURL('callback');
     const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
-
     try {
       await WebBrowser.openBrowserAsync(authUrl);
     } catch (error) {
-      console.error('❌ Open browser error:', error);
-      Alert.alert('Lỗi', 'Không mở được trình duyệt');
+      showAlert('Lỗi', 'Không mở được trình duyệt'); // 👈 Đã đổi thành showAlert
       setSocialLoading(false);
     }
   };
 
-  // Đăng nhập Facebook
   const handleFacebookLogin = async () => {
-    // Trên WEB: redirect đến web trung gian
+    if (isAdminMode) {
+      showAlert('Thông báo', 'Quản trị viên vui lòng đăng nhập bằng Email/Mật khẩu!'); // 👈 Đã đổi thành showAlert
+      return;
+    }
+
     if (Platform.OS === 'web') {
       setSocialLoading(true);
       const redirectUrl = `${window.location.origin}/callback`;
@@ -117,39 +124,39 @@ export default function LoginScreen() {
       window.location.href = authUrl;
       return;
     }
-
-    // Trên MOBILE: mở browser
     setSocialLoading(true);
     const redirectUrl = Linking.createURL('callback');
     const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
-
     try {
       await WebBrowser.openBrowserAsync(authUrl);
     } catch (error) {
-      console.error('❌ Open browser error:', error);
-      Alert.alert('Lỗi', 'Không mở được trình duyệt');
+      showAlert('Lỗi', 'Không mở được trình duyệt'); // 👈 Đã đổi thành showAlert
       setSocialLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.container}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
           <Text style={styles.title}>Beauty Tech</Text>
+
+          {/* TOGGLE CHỌN CHẾ ĐỘ ĐĂNG NHẬP */}
+          <View style={styles.toggleContainer}>
+            <Pressable
+              style={[styles.toggleBtn, !isAdminMode && styles.toggleBtnActive]}
+              onPress={() => setIsAdminMode(false)}
+            >
+              <Text style={[styles.toggleText, !isAdminMode && styles.toggleTextActive]}>Khách hàng</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.toggleBtn, isAdminMode && styles.toggleBtnActive]}
+              onPress={() => setIsAdminMode(true)}
+            >
+              <Text style={[styles.toggleText, isAdminMode && styles.toggleTextActive]}>Quản trị viên</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.inputWrapper}>
             <View style={styles.labelBox}>
@@ -181,40 +188,18 @@ export default function LoginScreen() {
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
               />
-              <Pressable
-                onPress={() => setShowPassword(!showPassword)}
-                hitSlop={10}
-                style={styles.eyeBtn}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color="#2b2b32"
-                />
+              <Pressable onPress={() => setShowPassword(!showPassword)} hitSlop={10} style={styles.eyeBtn}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#2b2b32" />
               </Pressable>
             </View>
           </View>
 
-          <Pressable
-            style={styles.forgotWrap}
-            onPress={() => router.push('/forgot-password')}
-          >
+          <Pressable style={styles.forgotWrap} onPress={() => router.push('/forgot-password')}>
             <Text style={styles.forgotText}>Forgot Password</Text>
           </Pressable>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.loginBtn,
-              (pressed || loading) && { opacity: 0.7 },
-            ]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.loginText}>LOGIN</Text>
-            )}
+          <Pressable style={({ pressed }) => [styles.loginBtn, (pressed || loading) && { opacity: 0.7 }]} onPress={handleLogin} disabled={loading}>
+            {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.loginText}>LOGIN</Text>}
           </Pressable>
 
           <View style={styles.orRow}>
@@ -224,48 +209,17 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.socialRow}>
-            {/* Google */}
-            <Pressable
-              style={[styles.socialBtn, socialLoading && { opacity: 0.5 }]}
-              onPress={handleGoogleLogin}
-              disabled={socialLoading}
-            >
-              {socialLoading ? (
-                <ActivityIndicator color="#EA4335" />
-              ) : (
-                <Image
-                  source={require('../../assets/icon-google.png')}
-                  style={styles.socialIcon}
-                  resizeMode="contain"
-                />
-              )}
+            <Pressable style={[styles.socialBtn, socialLoading && { opacity: 0.5 }]} onPress={handleGoogleLogin} disabled={socialLoading}>
+              {socialLoading ? <ActivityIndicator color="#EA4335" /> : <Image source={require('../../assets/icon-google.png')} style={styles.socialIcon} resizeMode="contain" />}
             </Pressable>
-
-            {/* Facebook */}
-            <Pressable
-              style={[styles.socialBtn, socialLoading && { opacity: 0.5 }]}
-              onPress={handleFacebookLogin}
-              disabled={socialLoading}
-            >
-              {socialLoading ? (
-                <ActivityIndicator color="#1877F2" />
-              ) : (
-                <Image
-                  source={require('../../assets/icon-facebook.png')}
-                  style={styles.socialIcon}
-                  resizeMode="contain"
-                />
-              )}
+            <Pressable style={[styles.socialBtn, socialLoading && { opacity: 0.5 }]} onPress={handleFacebookLogin} disabled={socialLoading}>
+              {socialLoading ? <ActivityIndicator color="#1877F2" /> : <Image source={require('../../assets/icon-facebook.png')} style={styles.socialIcon} resizeMode="contain" />}
             </Pressable>
           </View>
 
-          <Pressable
-            style={styles.registerWrap}
-            onPress={() => router.replace('/register')}
-          >
+          <Pressable style={styles.registerWrap} onPress={() => router.replace('/register')}>
             <Text style={styles.registerText}>
-              Do you not have an account yet?{' '}
-              <Text style={styles.registerLink}>REGISTER</Text>
+              Do you not have an account yet? <Text style={styles.registerLink}>REGISTER</Text>
             </Text>
           </Pressable>
         </ScrollView>
@@ -276,38 +230,19 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#ffffff' },
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 48,
-    paddingBottom: 40,
-    alignItems: 'center',
-  },
+  container: { paddingHorizontal: 20, paddingTop: 48, paddingBottom: 40, alignItems: 'center' },
   logo: { width: 147, height: 97 },
-  title: {
-    marginTop: 17,
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 40,
-    color: '#e76988',
-    textAlign: 'center',
-  },
-  inputWrapper: {
-    width: '100%',
-    marginTop: 53,
-    position: 'relative',
-  },
-  labelBox: {
-    position: 'absolute',
-    top: -7,
-    left: 26,
-    paddingHorizontal: 5,
-    backgroundColor: '#ffffff',
-    zIndex: 1,
-  },
-  label: {
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 9.2,
-    color: '#b5b9ca',
-  },
+  title: { marginTop: 17, fontFamily: 'Raleway_500Medium', fontSize: 40, color: '#e76988', textAlign: 'center' },
+  
+  toggleContainer: { flexDirection: 'row', backgroundColor: '#F5F5F5', borderRadius: 20, padding: 4, marginTop: 20, width: '100%', maxWidth: 300 },
+  toggleBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 16 },
+  toggleBtnActive: { backgroundColor: '#e76988', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
+  toggleText: { fontFamily: 'Raleway_600SemiBold', fontSize: 14, color: '#888' },
+  toggleTextActive: { color: '#ffffff' },
+
+  inputWrapper: { width: '100%', marginTop: 33, position: 'relative' }, 
+  labelBox: { position: 'absolute', top: -7, left: 26, paddingHorizontal: 5, backgroundColor: '#ffffff', zIndex: 1 },
+  label: { fontFamily: 'Raleway_500Medium', fontSize: 9.2, color: '#b5b9ca' },
   input: {
     height: 54,
     borderWidth: 1.84,
@@ -317,92 +252,29 @@ const styles = StyleSheet.create({
     fontFamily: 'Raleway_500Medium',
     fontSize: 14.7,
     color: '#2b2b32',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any, boxShadow: 'inset 0 0 0 1000px #ffffff', WebkitBoxShadow: 'inset 0 0 0 1000px #ffffff' } : {}),
   },
-  passwordRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 54,
-    borderWidth: 1.84,
-    borderColor: '#eef4fa',
-    borderRadius: 20.23,
-    paddingRight: 16,
-  },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', height: 54, borderWidth: 1.84, borderColor: '#eef4fa', borderRadius: 20.23, paddingRight: 16 },
   passwordInput: {
     flex: 1,
     paddingHorizontal: 22,
     fontFamily: 'Raleway_800ExtraBold',
     fontSize: 14.7,
     color: '#2b2b32',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any, boxShadow: 'inset 0 0 0 1000px #ffffff', WebkitBoxShadow: 'inset 0 0 0 1000px #ffffff' } : {}),
   },
   eyeBtn: { padding: 4 },
-  forgotWrap: {
-    width: '100%',
-    alignItems: 'flex-end',
-    marginTop: 15,
-    paddingRight: 12,
-  },
-  forgotText: {
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 13,
-    color: '#eb557a',
-    textDecorationLine: 'underline',
-  },
-  loginBtn: {
-    width: '100%',
-    height: 57,
-    backgroundColor: '#f5809d',
-    borderRadius: 28.74,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 33,
-  },
-  loginText: {
-    fontFamily: 'Raleway_600SemiBold',
-    fontSize: 16.6,
-    color: '#ffffff',
-    letterSpacing: 0.5,
-  },
-  orRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 19,
-  },
-  orLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#2b2b32',
-    opacity: 0.3,
-  },
-  orText: {
-    marginHorizontal: 10,
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 11,
-    color: '#2b2b32',
-  },
-  socialRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 59,
-    width: '100%',
-    marginTop: 33,
-  },
-  socialBtn: {
-    width: 83,
-    height: 54,
-    borderRadius: 20.23,
-    borderWidth: 1.84,
-    borderColor: '#e8eaed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  forgotWrap: { width: '100%', alignItems: 'flex-end', marginTop: 15, paddingRight: 12 },
+  forgotText: { fontFamily: 'Raleway_500Medium', fontSize: 13, color: '#eb557a', textDecorationLine: 'underline' },
+  loginBtn: { width: '100%', height: 57, backgroundColor: '#f5809d', borderRadius: 28.74, alignItems: 'center', justifyContent: 'center', marginTop: 33 },
+  loginText: { fontFamily: 'Raleway_600SemiBold', fontSize: 16.6, color: '#ffffff', letterSpacing: 0.5 },
+  orRow: { width: '100%', flexDirection: 'row', alignItems: 'center', marginTop: 19 },
+  orLine: { flex: 1, height: 1, backgroundColor: '#2b2b32', opacity: 0.3 },
+  orText: { marginHorizontal: 10, fontFamily: 'Raleway_500Medium', fontSize: 11, color: '#2b2b32' },
+  socialRow: { flexDirection: 'row', justifyContent: 'center', gap: 59, width: '100%', marginTop: 33 },
+  socialBtn: { width: 83, height: 54, borderRadius: 20.23, borderWidth: 1.84, borderColor: '#e8eaed', alignItems: 'center', justifyContent: 'center' },
   socialIcon: { width: 24, height: 24 },
   registerWrap: { marginTop: 38, alignItems: 'center' },
-  registerText: {
-    fontFamily: 'Raleway_500Medium',
-    fontSize: 11,
-    color: '#2b2b32',
-    textAlign: 'center',
-  },
+  registerText: { fontFamily: 'Raleway_500Medium', fontSize: 11, color: '#2b2b32', textAlign: 'center' },
   registerLink: { color: '#eb557a', fontWeight: '700' },
 });

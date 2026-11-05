@@ -1,29 +1,37 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { storage } from '../local/storage';
 
-const BASE_URL = Platform.select({
-  web: 'http://localhost:5000',
-  android: 'http://10.0.2.2:5000',
-  ios: 'http://localhost:5000',
-  default: 'http://10.0.2.2:5000',
-});
+// Tự động lấy IP của máy tính đang chạy Expo
+const getBaseURL = () => {
+  const debuggerHost = Constants.expoConfig?.hostUri;
+  const localhost = debuggerHost?.split(':')[0];
+
+  if (!localhost) {
+    // Dự phòng nếu không lấy được IP (VD: máy ảo Android)
+    return Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
+  }
+  return `http://${localhost}:5000`;
+};
 
 const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 30000,
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+// Tự động gắn Token vào Header
 api.interceptors.request.use(
   async (config) => {
-    // Lấy token từ bộ nhớ máy
-    const token = await storage.getItem('token');
-    if (token) {
-      // Gắn vào header Authorization
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = await AsyncStorage.getItem('@token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.log("Lỗi lấy token:", error);
     }
     return config;
   },
