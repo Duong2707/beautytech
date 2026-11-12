@@ -44,6 +44,16 @@
           "photosPermission": "Ứng dụng cần truy cập ảnh để phân tích tình trạng da.",
           "cameraPermission": "Ứng dụng cần camera để chụp ảnh phân tích da."
         }
+      ],
+      "expo-sqlite",
+      "react-native-fast-tflite",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "cmakeVersion": "4.1.2"
+          }
+        }
       ]
     ],
     "experiments": {

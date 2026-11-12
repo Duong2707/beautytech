@@ -9,6 +9,7 @@
     "@google/genai": "^2.32.0",
     "@google/generative-ai": "^0.24.1",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "12.0.1",
     "@react-native-google-signin/google-signin": "^16.1.5",
     "axios": "^1.20.0",
     "expo": "~58.0.22",
@@ -21,19 +22,24 @@
     "expo-font": "~58.0.11",
     "expo-glass-effect": "~58.0.5",
     "expo-image": "~58.0.18",
+    "expo-image-manipulator": "~58.0.16",
     "expo-image-picker": "~58.0.10",
     "expo-linking": "~58.0.15",
     "expo-router": "~58.0.29",
     "expo-secure-store": "~58.0.2",
     "expo-splash-screen": "~58.0.12",
+    "expo-sqlite": "~58.0.15",
     "expo-status-bar": "~58.0.4",
     "expo-symbols": "~58.0.4",
     "expo-system-ui": "~58.0.7",
     "expo-web-browser": "~58.0.7",
     "firebase": "^13.0.0",
+    "jest": "~30.5.2",
+    "jest-expo": "~58.0.14",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
+    "react-native-fast-tflite": "^3.0.1",
     "react-native-gesture-handler": "~3.3.0",
     "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.10.1",
@@ -48,9 +54,13 @@
     "@babel/plugin-transform-private-methods": "^7.29.7",
     "@babel/plugin-transform-private-property-in-object": "^7.29.7",
     "@babel/plugin-transform-typescript": "^7.29.9",
+    "@testing-library/react-native": "^14.1.0",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.3.0",
+    "jest": "^30.5.2",
     "patch-package": "^8.0.1",
     "postinstall-postinstall": "^2.1.0",
+    "react-test-renderer": "^19.3.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -60,7 +70,14 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "test": "jest"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)"
+    ]
   },
   "private": true
 }

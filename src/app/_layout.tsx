@@ -13,8 +13,14 @@ import { CartProvider } from '../presentation/contexts/CartContext';
 import { ThemeProvider } from '../presentation/contexts/ThemeContext'; 
 // 👇 1. Import thêm WishlistProvider
 import { WishlistProvider } from '../presentation/contexts/WishlistContext'; 
+import { useEffect } from 'react';
+import { setupNetworkListener } from '../services/offlineSync';
 
 export default function RootLayout() {
+  useEffect(() => {
+    // 🌟 Kích hoạt theo dõi mạng ngay khi app khởi động
+    setupNetworkListener();
+  }, []);
   const [fontsLoaded] = useFonts({
     Raleway_500Medium,
     Raleway_600SemiBold,

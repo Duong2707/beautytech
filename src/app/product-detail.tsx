@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Image, Pressable, StyleSheet, StatusBar, Alert, ActivityIndicator, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { sqliteStorage as AsyncStorage } from '../data/datasources/local/sqliteStorage';  // 🌟 Thêm import để đọc Cache
 import { useCart } from '../presentation/contexts/CartContext'; 
 import { useTheme } from '../presentation/contexts/ThemeContext';
 import { useAuth } from '../presentation/contexts/AuthContext';
@@ -48,7 +49,26 @@ export default function ProductDetailScreen() {
           setError('Sản phẩm không tồn tại.');
         }
       } catch (err: any) {
-        setError('Lỗi khi tải chi tiết sản phẩm.');
+        // 🌟 XỬ LÝ OFFLINE: Nếu lỗi gọi API, tìm trong Cache
+        try {
+          const cached = await AsyncStorage.getItem('@cached_products');
+          if (cached) {
+            const productsList = JSON.parse(cached);
+            const foundProduct = productsList.find((p: any) => p._id === productId);
+            
+            if (foundProduct) {
+              setProduct(foundProduct);
+              if (foundProduct.sizes && foundProduct.sizes.length > 0) setTempSize(foundProduct.sizes[0]);
+              setError(null);
+            } else {
+              setError('Không tìm thấy sản phẩm trong bộ nhớ đệm.');
+            }
+          } else {
+            setError('Lỗi khi tải chi tiết sản phẩm (Không có mạng).');
+          }
+        } catch (cacheErr) {
+          setError('Lỗi khi tải chi tiết sản phẩm.');
+        }
       } finally {
         setLoading(false); 
       }
@@ -102,7 +122,8 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={dynamicStyles.screen}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
+      {/* 🌟 ĐÃ XÓA backgroundColor ĐỂ HẾT LỖI TS */}
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={dynamicStyles.scrollContent}>
         
         <View style={dynamicStyles.header}>
@@ -140,11 +161,11 @@ export default function ProductDetailScreen() {
 
         <View style={dynamicStyles.content}>
           <View style={dynamicStyles.eyebrowRow}>
-            <Text style={dynamicStyles.eyebrow}>{product.brand.toUpperCase()}</Text>
+            <Text style={dynamicStyles.eyebrow}>{product.brand?.toUpperCase() || 'BEAUTYTECH'}</Text>
             <View style={dynamicStyles.rating}>
               <Ionicons name="star" size={14} color="#FFC107" />
-              <Text style={dynamicStyles.ratingText}>{product.rating}</Text>
-              <Text style={dynamicStyles.soldText}>({product.sold} đã bán)</Text>
+              <Text style={dynamicStyles.ratingText}>{product.rating || 5}</Text>
+              <Text style={dynamicStyles.soldText}>({product.sold || 0} đã bán)</Text>
             </View>
           </View>
 

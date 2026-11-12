@@ -5,6 +5,7 @@ import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../presentation/contexts/AuthContext'; 
 import { fetchAddresses, createAddress, updateAddress, deleteAddress } from '../services/addressApi';
+import { onOfflineSyncCompleted } from '../services/offlineSync'; // 🌟 Import hàm lắng nghe
 
 interface Address {
   _id: string;
@@ -12,11 +13,12 @@ interface Address {
   phone: string;
   address: string;
   isDefault: boolean;
+  isOffline?: boolean; // 🌟 Thêm trường này để check nhãn
 }
 
 export default function ShippingAddressScreen() {
   const { user } = useAuth(); 
-  const { selectMode } = useLocalSearchParams(); // Kiểm tra xem có phải đang ở chế độ chọn địa chỉ không
+  const { selectMode } = useLocalSearchParams(); 
 
   const [addresses, setAddresses] = useState<Address[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +45,15 @@ export default function ShippingAddressScreen() {
     }, [])
   );
 
+  // 🌟 Lắng nghe sự kiện đồng bộ để load lại danh sách
+  useEffect(() => {
+    const unsubscribe = onOfflineSyncCompleted(() => {
+      console.log("Đã nhận tín hiệu đồng bộ, đang tải lại địa chỉ...");
+      loadData();
+    });
+    return () => unsubscribe();
+  }, []);
+
   const openForm = (item: Address | null = null) => {
     if (item) {
       setEditingId(item._id);
@@ -60,13 +71,20 @@ export default function ShippingAddressScreen() {
       return;
     }
     try {
+      let res;
       if (editingId) {
-        await updateAddress(editingId, formData);
+        res = await updateAddress(editingId, formData);
       } else {
-        await createAddress(formData);
+        res = await createAddress(formData);
       }
+
       setModalVisible(false);
-      loadData(); 
+
+      if (res && res.isOffline) {
+        if (Platform.OS === 'web') window.alert('Đã lưu địa chỉ vào máy. Sẽ đồng bộ khi có mạng!');
+        else Alert.alert("Lưu ngoại tuyến", "Đã lưu địa chỉ vào máy. Sẽ đồng bộ khi có mạng!");
+      }
+      loadData(); // Gọi loadData để lấy từ Cache hoặc API
     } catch (error: any) {
       console.error("Lỗi khi lưu:", error);
       Alert.alert("Lỗi", error.message || "Không thể lưu địa chỉ");
@@ -76,7 +94,11 @@ export default function ShippingAddressScreen() {
   const handleDelete = (id: string) => {
     const performDelete = async () => {
       try {
-        await deleteAddress(id);
+        const res = await deleteAddress(id);
+        if (res && res.isOffline) {
+          if (Platform.OS === 'web') window.alert('Đã xóa trên máy. Sẽ đồng bộ khi có mạng!');
+          else Alert.alert("Lưu ngoại tuyến", "Đã xóa trên máy. Sẽ đồng bộ khi có mạng!");
+        }
         loadData();
       } catch (error) {
         Alert.alert("Lỗi", "Không thể xóa địa chỉ");
@@ -97,12 +119,13 @@ export default function ShippingAddressScreen() {
     setFormData((prev) => ({ ...prev, isDefault: !prev.isDefault }));
   };
 
-  // 👇 HÀM XỬ LÝ KHI BẤM CHỌN ĐỊA CHỈ (CHỈ DÙNG KHI CÓ SELECT_MODE)
   const handleSelectAddress = async (item: Address) => {
     try {
-      // Cập nhật địa chỉ này thành mặc định
-      await updateAddress(item._id, { ...item, isDefault: true });
-      // Quay lại trang thanh toán
+      const res = await updateAddress(item._id, { ...item, isDefault: true });
+      if (res && res.isOffline) {
+        if (Platform.OS === 'web') window.alert('Đã chọn địa chỉ mặc định (Ngoại tuyến).');
+        else Alert.alert("Lưu ngoại tuyến", "Đã chọn địa chỉ mặc định. Sẽ đồng bộ khi có mạng!");
+      }
       router.back();
     } catch (error) {
       Alert.alert("Lỗi", "Không thể chọn địa chỉ này.");
@@ -139,11 +162,20 @@ export default function ShippingAddressScreen() {
                   <Text style={dynamicStyles.nameText}>{item.name}</Text>
                   <Text style={dynamicStyles.phoneText}>| {item.phone}</Text>
                 </View>
-                {item.isDefault && (
-                  <View style={dynamicStyles.defaultBadge}>
-                    <Text style={dynamicStyles.defaultText}>Mặc định</Text>
-                  </View>
-                )}
+                
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {/* 🌟 NHÃN OFFLINE */}
+                  {item.isOffline && (
+                    <View style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#FF9800' }}>
+                      <Text style={{ fontSize: 9, color: '#FF9800', fontWeight: 'bold' }}>Chờ đồng bộ</Text>
+                    </View>
+                  )}
+                  {item.isDefault && (
+                    <View style={dynamicStyles.defaultBadge}>
+                      <Text style={dynamicStyles.defaultText}>Mặc định</Text>
+                    </View>
+                  )}
+                </View>
               </View>
 
               <Text style={dynamicStyles.addressText}>{item.address}</Text>
@@ -172,7 +204,6 @@ export default function ShippingAddressScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* MODAL THÊM / SỬA ĐỊA CHỈ */}
       <Modal visible={isModalVisible} animationType="slide" transparent={true}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <View style={dynamicStyles.modalOverlay}>

@@ -1,3 +1,4 @@
+// @ts-ignore
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({

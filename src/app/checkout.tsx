@@ -3,13 +3,14 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image, Alert, Platform, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sqliteStorage as AsyncStorage } from '../data/datasources/local/sqliteStorage'; 
+import NetInfo from '@react-native-community/netinfo'; // 🌟 Thêm import NetInfo để check mạng cho QR
 import { useCart } from '../presentation/contexts/CartContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
 import { useAuth } from '../presentation/contexts/AuthContext';
 import { fetchAddresses } from '../services/addressApi';
 import { createOrderApi } from '../services/orderApi';
-import api from '../data/datasources/remote/api'; // Thêm api để check thanh toán và lấy voucher
+import api from '../data/datasources/remote/api';
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
 
@@ -31,7 +32,6 @@ export default function CheckoutScreen() {
   const [payment, setPayment] = useState<'cod' | 'qr'>('cod');
   const [isPaid, setIsPaid] = useState(false);
   
-  // 🌟 STATE QUẢN LÝ VOUCHER TỪ DATABASE
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [appliedVoucher, setAppliedVoucher] = useState<any>(null);
 
@@ -40,13 +40,12 @@ export default function CheckoutScreen() {
 
   useEffect(() => {
     setCurrentOrderId('ORD' + Math.floor(Math.random() * 1000000));
-    loadVouchers(); // Load voucher khi mở trang
+    loadVouchers();
   }, []);
 
   const loadVouchers = async () => {
     try {
       const res = await api.get('/api/vouchers');
-      // Chỉ lấy voucher active và chưa hết hạn
       const validVouchers = (res.data.data || res.data).filter((v: any) => 
         v.active && new Date(v.expiry) >= new Date() && v.quantity > v.used
       );
@@ -56,7 +55,6 @@ export default function CheckoutScreen() {
     }
   };
 
-  // 1. TỰ ĐỘNG LẤY ĐỊA CHỈ MẶC ĐỊNH
   useFocusEffect(
     useCallback(() => {
       const loadDefaultAddress = async () => {
@@ -80,7 +78,6 @@ export default function CheckoutScreen() {
     }, [])
   );
 
-  // 2. ÁP DỤNG VOUCHER (Từ params hoặc từ AsyncStorage)
   useEffect(() => {
     const checkAndApplyVoucher = async () => {
       let codeToApply = params.voucherCode;
@@ -101,12 +98,16 @@ export default function CheckoutScreen() {
     checkAndApplyVoucher();
   }, [params.voucherCode, subTotal, vouchers]);
 
-  // 3. POLLING KIỂM TRA THANH TOÁN
+  // 🌟 3. POLLING KIỂM TRA THANH TOÁN (Có kiểm tra mạng để không bị spam lỗi)
   useEffect(() => {
     let interval: any;
     if (payment === 'qr' && !isPaid && currentOrderId) {
       interval = setInterval(async () => {
         try {
+          // Kiểm tra mạng trước khi gọi API
+          const netState = await NetInfo.fetch();
+          if (!netState.isConnected) return; // Nếu mất mạng thì bỏ qua, không gọi API
+
           const res = await api.get(`/api/payment/check-status/${currentOrderId}`);
           if (res.data?.status === 'paid') {
             setIsPaid(true); 
@@ -118,7 +119,6 @@ export default function CheckoutScreen() {
     return () => clearInterval(interval);
   }, [payment, isPaid, currentOrderId]);
 
-  // 4. TỰ ĐỘNG ĐẶT HÀNG KHI THANH TOÁN THÀNH CÔNG
   useEffect(() => {
     if (isPaid && payment === 'qr' && !isOrderPlaced) {
       const timer = setTimeout(() => {
@@ -129,10 +129,8 @@ export default function CheckoutScreen() {
     }
   }, [isPaid, payment, isOrderPlaced]);
 
-  // Lọc voucher phù hợp với đơn hàng hiện tại
   const availableVouchers = useMemo(() => vouchers.filter(v => subTotal >= v.minOrder), [vouchers, subTotal]);
   
-  // 🌟 TÍNH TOÁN GIẢM GIÁ THEO % HOẶC TIỀN MẶT
   const discountAmount = useMemo(() => {
     if (!appliedVoucher) return 0;
     if (appliedVoucher.type === 'percent') {
@@ -199,15 +197,27 @@ export default function CheckoutScreen() {
         orderStatus: 'pending',
       };
 
-      await createOrderApi(newOrder); 
+      // 🌟 BẮT KẾT QUẢ TRẢ VỀ TỪ API
+      const res = await createOrderApi(user?.token || 'fake_token', newOrder);
       await removeSelectedFromCart(); 
       
+      // 🌟 XỬ LÝ THÔNG BÁO OFFLINE
+      const isOfflineOrder = res && res.isOffline;
+      
       if (Platform.OS === 'web') {
-        if (!isAuto) window.alert('Đặt hàng thành công!');
+        if (!isAuto) {
+          window.alert(isOfflineOrder 
+            ? 'Đơn hàng đã được lưu ngoại tuyến! Sẽ đồng bộ khi có mạng.' 
+            : 'Đặt hàng thành công!');
+        }
         router.replace('/home'); 
       } else {
         if (!isAuto) {
-          Alert.alert('Đặt hàng thành công', 'Cảm ơn bạn đã mua sắm!', [{ text: 'Về trang chủ', onPress: () => router.replace('/home') }]);
+          Alert.alert(
+            isOfflineOrder ? 'Lưu ngoại tuyến' : 'Đặt hàng thành công', 
+            isOfflineOrder ? 'Đơn hàng đã được lưu trên máy. Sẽ tự động đồng bộ khi có mạng!' : 'Cảm ơn bạn đã mua sắm!', 
+            [{ text: 'Về trang chủ', onPress: () => router.replace('/home') }]
+          );
         } else {
           router.replace('/home');
         }
@@ -292,7 +302,7 @@ export default function CheckoutScreen() {
           }) : <Text style={{ color: theme.textMuted, fontSize: 13, fontStyle: 'italic' }}>Không có mã ưu đãi phù hợp.</Text>}
         </View>
 
-        {/* VẬN CHUYỂN, THANH TOÁN, SẢN PHẨM (Giữ nguyên như cũ) */}
+        {/* VẬN CHUYỂN, THANH TOÁN, SẢN PHẨM */}
         <View style={dynamicStyles.sectionCard}>
           <View style={dynamicStyles.sectionHeader}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Ionicons name="cube" size={20} color={theme.primary} /><Text style={dynamicStyles.sectionTitle}>Phương thức vận chuyển</Text></View></View>
           <Pressable style={dynamicStyles.optionRow} onPress={() => setShipping('fast')}>
@@ -375,7 +385,6 @@ export default function CheckoutScreen() {
   );
 }
 
-// Giữ nguyên toàn bộ Styles cũ của bạn
 const getStyles = (theme: any) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15 },

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sqliteStorage as AsyncStorage } from '../../data/datasources/local/sqliteStorage'; 
 import { toggleWishlistApi } from '../../services/wishlistApi';
 import { useAuth } from './AuthContext';
 
@@ -37,7 +37,7 @@ export const WishlistProvider = ({ children }: any) => {
       AsyncStorage.setItem('@wishlist', JSON.stringify(newIds));
       
       if (user) {
-        toggleWishlistApi(user.token || 'fake_token', productId);
+        toggleWishlistApi(productId);
       }
       
       return newIds;

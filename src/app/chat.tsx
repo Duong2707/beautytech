@@ -19,7 +19,7 @@ export default function ChatScreen() {
     { id: '1', role: 'model', text: 'Xin chào! Mình là BeautyTech AI. Bạn cần tư vấn gì về tình trạng da hôm nay không?' }
   ]);
 
-  const handleSend = async () => {
+    const handleSend = async () => {
     if (!inputText.trim() || isLoading) return;
 
     const userMsg = inputText.trim();
@@ -38,12 +38,20 @@ export default function ChatScreen() {
         }));
 
       const aiResponse = await sendMessageToAI(userMsg, historyForAI);
-      
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: aiResponse }]);
+      
     } catch (error: any) {
-      const errorMessage = error.message?.includes('401') 
-        ? 'Lỗi API Key (Vui lòng kiểm tra lại file .env)' 
-        : 'Hệ thống AI đang bận một chút, bạn thử lại sau nhé!';
+      let errorMessage = '';
+      
+      // 🌟 KIỂM TRA LỖI MẠNG VÀ TRẢ VỀ CÂU CỐ ĐỊNH
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        errorMessage = '📶 Kết nối mạng đang gián đoạn. BeautyTech AI cần Internet để hoạt động. Bạn vui lòng kiểm tra lại Wifi/4G và thử lại nhé!';
+      } else if (error.message?.includes('401')) {
+        errorMessage = 'Lỗi API Key (Vui lòng kiểm tra lại file .env)';
+      } else {
+        errorMessage = 'Hệ thống AI đang bận một chút, bạn thử lại sau nhé!';
+      }
+      
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: errorMessage }]);
     } finally {
       setIsLoading(false);

@@ -1,8 +1,9 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sqliteStorage as AsyncStorage } from '../local/sqliteStorage'; 
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+const BASE_URL = 'https://beautytech-backend.onrender.com'; 
 // Tự động lấy IP của máy tính đang chạy Expo
 const getBaseURL = () => {
   const debuggerHost = Constants.expoConfig?.hostUri;
@@ -16,7 +17,7 @@ const getBaseURL = () => {
 };
 
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },

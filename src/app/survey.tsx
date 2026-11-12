@@ -47,7 +47,8 @@ export default function SurveyScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
+      {/* 🌟 ĐÃ XÓA backgroundColor ĐỂ HẾT LỖI TS */}
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
       
       <View style={dynamicStyles.header}>
         <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace("/home")}>

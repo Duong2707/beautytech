@@ -3,20 +3,18 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Switch, Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sqliteStorage as AsyncStorage } from '../data/datasources/local/sqliteStorage'; 
 import { useTheme } from '../presentation/contexts/ThemeContext';
-import { useAuth } from '../presentation/contexts/AuthContext'; // 👈 Import Auth
-import api from '../data/datasources/remote/api';
+import { useAuth } from '../presentation/contexts/AuthContext';
+import api from '../data/datasources/remote/api'; // 🌟 Import instance api
 
 export default function SettingsScreen() {
   const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useAuth(); // 👈 Lấy user để lấy token và hàm logout
+  const { user, logout } = useAuth(); 
   
-  // Mặc định ban đầu là bật (true)
   const [promoNotif, setPromoNotif] = useState(true);
   const [orderNotif, setOrderNotif] = useState(true);
 
-  // 1. Load trạng thái đã lưu khi mở trang
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -32,7 +30,6 @@ export default function SettingsScreen() {
     loadSettings();
   }, []);
 
-  // 2. Hàm thay đổi và lưu trạng thái
   const handleTogglePromo = async (value: boolean) => {
     setPromoNotif(value);
     await AsyncStorage.setItem('@setting_promo_notif', value.toString());
@@ -43,32 +40,30 @@ export default function SettingsScreen() {
     await AsyncStorage.setItem('@setting_order_notif', value.toString());
   };
 
-  // 3. HÀM XỬ LÝ XÓA TÀI KHOẢN
+  // 🌟 CẬP NHẬT LẠI HÀM XÓA TÀI KHOẢN
   const handleDeleteAccount = () => {
     const performDelete = async () => {
       try {
-        const res = await fetch('/api/users/profile', {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${user?.token || 'fake_token'}`
-          }
-        });
+        // Dùng api instance (tự động gắn token và base URL)
+        const res = await api.delete('/api/users/profile');
 
-        if (res.ok) {
+        if (res.data.success) {
           if (Platform.OS === 'web') {
             window.alert("Tài khoản của bạn đã được xóa vĩnh viễn.");
           } else {
             Alert.alert("Thông báo", "Tài khoản của bạn đã được xóa vĩnh viễn.");
           }
           
-          await logout(); // Đăng xuất khỏi app
-          router.replace('/login'); // Về trang đăng nhập
-        } else {
-          const data = await res.json();
-          Alert.alert("Lỗi", data.message || "Không thể xóa tài khoản lúc này.");
+          await logout(); 
+          router.replace('/login'); 
         }
-      } catch (error) {
-        Alert.alert("Lỗi", "Lỗi kết nối server.");
+      } catch (error: any) {
+        // 🌟 BẮT LỖI MẠNG
+        if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+          Alert.alert("Lỗi", "Không có kết nối Internet. Vui lòng kiểm tra Wifi/4G để thực hiện thao tác này!");
+        } else {
+          Alert.alert("Lỗi", error.response?.data?.message || "Không thể xóa tài khoản lúc này.");
+        }
       }
     };
 

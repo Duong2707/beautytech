@@ -53,8 +53,14 @@ export default function LoginScreen() {
       await setAuthData(userData, token);
       router.replace('/home'); 
     } catch (error: any) {
-      const message = error?.response?.data?.message || 'Đăng nhập thất bại';
-      showAlert('Lỗi', message); // 👈 Đã đổi thành showAlert
+      let message = error?.response?.data?.message || 'Đăng nhập thất bại';
+      
+      // 🌟 Bắt lỗi mạng
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        message = 'Không có kết nối Internet. Vui lòng kiểm tra Wifi/4G và thử lại!';
+      }
+      
+      showAlert('Lỗi', message);
     } finally {
       setSocialLoading(false);
     }
@@ -62,7 +68,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      showAlert('Lỗi', 'Vui lòng nhập email và password'); // 👈 Đã đổi thành showAlert
+      showAlert('Lỗi', 'Vui lòng nhập email và password');
       return;
     }
     setLoading(true);
@@ -75,8 +81,14 @@ export default function LoginScreen() {
       }
     } catch (error: any) {
       // Lấy câu thông báo lỗi từ Backend trả về (VD: "Email hoặc password không đúng")
-      const message = error?.response?.data?.message || 'Đăng nhập thất bại';
-      showAlert('Lỗi', message); // 👈 Đã đổi thành showAlert
+      let message = error?.response?.data?.message || 'Đăng nhập thất bại';
+      
+      // 🌟 Bắt lỗi mạng
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        message = 'Không có kết nối Internet. Vui lòng kiểm tra Wifi/4G và thử lại!';
+      }
+      
+      showAlert('Lỗi', message);
     } finally {
       setLoading(false);
     }
@@ -84,7 +96,7 @@ export default function LoginScreen() {
 
   const handleGoogleLogin = async () => {
     if (isAdminMode) {
-      showAlert('Thông báo', 'Quản trị viên vui lòng đăng nhập bằng Email/Mật khẩu!'); // 👈 Đã đổi thành showAlert
+      showAlert('Thông báo', 'Quản trị viên vui lòng đăng nhập bằng Email/Mật khẩu!');
       return;
     }
 
@@ -95,7 +107,12 @@ export default function LoginScreen() {
         const idToken = await result.user.getIdToken();
         await handleFirebaseToken(idToken);
       } catch (error: any) {
-        showAlert('Lỗi', error.message || 'Đăng nhập Google thất bại'); // 👈 Đã đổi thành showAlert
+        // Firebase cũng có lỗi mạng
+        let message = error.message || 'Đăng nhập Google thất bại';
+        if (error.code === 'auth/network-request-failed') {
+          message = 'Không có kết nối Internet. Vui lòng kiểm tra lại mạng!';
+        }
+        showAlert('Lỗi', message);
         setSocialLoading(false);
       }
       return;
@@ -106,14 +123,14 @@ export default function LoginScreen() {
     try {
       await WebBrowser.openBrowserAsync(authUrl);
     } catch (error) {
-      showAlert('Lỗi', 'Không mở được trình duyệt'); // 👈 Đã đổi thành showAlert
+      showAlert('Lỗi', 'Không mở được trình duyệt');
       setSocialLoading(false);
     }
   };
 
   const handleFacebookLogin = async () => {
     if (isAdminMode) {
-      showAlert('Thông báo', 'Quản trị viên vui lòng đăng nhập bằng Email/Mật khẩu!'); // 👈 Đã đổi thành showAlert
+      showAlert('Thông báo', 'Quản trị viên vui lòng đăng nhập bằng Email/Mật khẩu!');
       return;
     }
 
@@ -130,7 +147,7 @@ export default function LoginScreen() {
     try {
       await WebBrowser.openBrowserAsync(authUrl);
     } catch (error) {
-      showAlert('Lỗi', 'Không mở được trình duyệt'); // 👈 Đã đổi thành showAlert
+      showAlert('Lỗi', 'Không mở được trình duyệt');
       setSocialLoading(false);
     }
   };

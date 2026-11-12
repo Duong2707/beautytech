@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, ActivityIndicator, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sqliteStorage as AsyncStorage } from '../data/datasources/local/sqliteStorage'; 
 import { useTheme } from '../presentation/contexts/ThemeContext';
 import { fetchNotifications, markNotificationReadApi } from '../services/notificationApi';
 

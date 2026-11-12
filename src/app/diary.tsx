@@ -22,27 +22,26 @@ const showConfirm = (title: string, message: string, onConfirm: () => void) => {
 export default function DiaryScreen() {
   const router = useRouter();
   const { theme } = useTheme();
-  const { user } = useAuth(); // Vẫn giữ user ở đây để useEffect tự load lại khi đăng nhập/xuất
+  const { user } = useAuth(); 
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       loadHistory();
-    }, [user]) // Khi user thay đổi, tự động gọi lại loadHistory
+    }, [user]) 
   );
 
   // 👇 LẤY DỮ LIỆU TỪ API (Đã bỏ token)
   const loadHistory = async () => {
     try {
       setLoading(true);
-      const res = await fetchDiariesApi(); // ✅ Bỏ token
+      const res = await fetchDiariesApi(); 
       if (res.success) {
-        // Map _id của Mongo thành id để khớp với giao diện
         const formatted = res.data.map((item: any) => ({
           ...item,
           id: item._id,
-          date: item.date || item.createdAt // Đảm bảo có ngày
+          date: item.date || item.createdAt 
         }));
         setHistory(formatted);
       }
@@ -53,24 +52,36 @@ export default function DiaryScreen() {
     }
   };
 
-  // 👇 XÓA TOÀN BỘ QUA API (Đã bỏ token)
+  // 👇 XÓA TOÀN BỘ QUA API
   const clearAllHistory = () => {
     showConfirm('Xóa tất cả', 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử nhật ký da?', async () => {
       try {
-        await clearDiaryApi(); // ✅ Bỏ token
+        const res = await clearDiaryApi(); 
         setHistory([]);
+        
+        // 🌟 XỬ LÝ KHI XÓA OFFLINE
+        if (res && res.isOffline) {
+          if (Platform.OS === 'web') window.alert('Đã xóa trên máy. Sẽ đồng bộ khi có mạng!');
+          else Alert.alert('Lưu ngoại tuyến', 'Đã xóa trên máy. Sẽ đồng bộ khi có mạng!');
+        }
       } catch (error) {
         Alert.alert('Lỗi', 'Không thể xóa toàn bộ nhật ký.');
       }
     });
   };
 
-  // 👇 XÓA TỪNG BẢN GHI QUA API (Đã bỏ token)
+  // 👇 XÓA TỪNG BẢN GHI QUA API
   const deleteEntry = (id: string) => {
     showConfirm('Xóa bản ghi', 'Bạn có chắc chắn muốn xóa kết quả quét da này không?', async () => {
       try {
-        await deleteDiaryApi(id); // ✅ Bỏ token, chỉ truyền id
+        const res = await deleteDiaryApi(id); 
         loadHistory(); // Tải lại danh sách sau khi xóa
+
+        // 🌟 XỬ LÝ KHI XÓA OFFLINE
+        if (res && res.isOffline) {
+          if (Platform.OS === 'web') window.alert('Đã xóa trên máy. Sẽ đồng bộ khi có mạng!');
+          else Alert.alert('Lưu ngoại tuyến', 'Đã xóa trên máy. Sẽ đồng bộ khi có mạng!');
+        }
       } catch (error) {
         Alert.alert('Lỗi', 'Không thể xóa bản ghi này.');
       }

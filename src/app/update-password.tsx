@@ -13,7 +13,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-// 👇 Xóa ScrollView ở trên, thêm 2 dòng này vào đây
 // @ts-ignore
 import { ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -70,7 +69,13 @@ export default function UpdatePasswordScreen() {
         else Alert.alert('Thành công', 'Đặt lại mật khẩu thành công');
       }, 300);
     } catch (error: any) {
-      const message = error?.response?.data?.message || 'Có lỗi xảy ra';
+      let message = error?.response?.data?.message || 'Có lỗi xảy ra';
+
+      // 🌟 XỬ LÝ LỖI MẤT MẠNG TẠI ĐÂY
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        message = 'Không có kết nối Internet. Vui lòng kiểm tra Wifi/4G và thử lại!';
+      }
+
       if (Platform.OS === 'web') window.alert(message);
       else Alert.alert('Lỗi', message);
     } finally {

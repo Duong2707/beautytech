@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sqliteStorage as AsyncStorage } from '../../data/datasources/local/sqliteStorage'; 
 import api from '../../data/datasources/remote/api';
 
 type AuthContextType = {

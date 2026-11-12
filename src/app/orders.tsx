@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 // @ts-ignore
 import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image, ActivityIndicator, Alert, Modal, TextInput, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../presentation/contexts/AuthContext';
 import { fetchOrdersApi, updateOrderStatusApi, submitReviewApi, cancelOrderApi } from '../services/orderApi';
+import { onOfflineSyncCompleted } from '../services/offlineSync';
 
 const TABS = ['Tất cả', 'Chờ xác nhận', 'Chờ lấy hàng', 'Chờ giao hàng', 'Đánh giá'];
 
@@ -35,12 +36,20 @@ export default function OrdersScreen() {
     }, [user])
   );
 
+  useEffect(() => {
+    const unsubscribe = onOfflineSyncCompleted(() => {
+      console.log("Đã nhận tín hiệu đồng bộ, đang tải lại đơn hàng...");
+      loadOrdersFromApi();
+    });
+    return () => unsubscribe();
+  }, []);
+
   const loadOrdersFromApi = async () => {
     try {
       setLoading(true);
       const res = await fetchOrdersApi();
       if (res.success) {
-        const formattedOrders = res.data.map((o: any) => ({ ...o, id: o.orderId }));
+        const formattedOrders = res.data.map((o: any) => ({ ...o, id: o.orderId || o._id }));
         setOrders(formattedOrders);
       }
     } catch (e) {
@@ -53,9 +62,15 @@ export default function OrdersScreen() {
   const handleCancelOrder = (order: any) => {
     const confirmCancel = async () => {
       try {
-        await cancelOrderApi(order.id);
-        showToast(`Đã hủy đơn hàng ${order.id}`);
-        loadOrdersFromApi();
+        const res = await cancelOrderApi(order.id);
+        
+        if (res && res.isOffline) {
+          setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderStatus: 'cancelled' } : o));
+          showToast(`Đã hủy đơn (Ngoại tuyến). Sẽ đồng bộ khi có mạng!`);
+        } else {
+          showToast(`Đã hủy đơn hàng ${order.id}`);
+          loadOrdersFromApi();
+        }
       } catch (error) {
         Alert.alert("Lỗi", "Không thể hủy đơn hàng.");
       }
@@ -71,12 +86,17 @@ export default function OrdersScreen() {
     }
   };
 
-  // 🌟 Hàm xử lý khi khách hàng bấm "Đã nhận được hàng"
   const handleCustomerReceived = async (order: any) => {
     try {
-      await updateOrderStatusApi(order.id, 'delivered');
-      showToast(`Đã xác nhận nhận hàng đơn ${order.id}`);
-      loadOrdersFromApi();
+      const res = await updateOrderStatusApi(order.id, 'delivered');
+      
+      if (res && res.isOffline) {
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, orderStatus: 'delivered' } : o));
+        showToast(`Đã xác nhận nhận hàng (Ngoại tuyến). Sẽ đồng bộ khi có mạng!`);
+      } else {
+        showToast(`Đã xác nhận nhận hàng đơn ${order.id}`);
+        loadOrdersFromApi();
+      }
     } catch (error) {
       Alert.alert("Lỗi", "Không thể cập nhật trạng thái.");
     }
@@ -85,10 +105,16 @@ export default function OrdersScreen() {
   const handleSubmitReview = async () => {
     if (!selectedOrder) return;
     try {
-      await submitReviewApi(selectedOrder.id, rating, comment);
+      const res = await submitReviewApi(selectedOrder.id, rating, comment);
       setShowReview(false);
-      showToast(`Cảm ơn bạn! Đánh giá đơn ${selectedOrder.id} đã được gửi.`);
-      loadOrdersFromApi();
+      
+      if (res && res.isOffline) {
+        setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, orderStatus: 'reviewed', rating, comment } : o));
+        showToast(`Cảm ơn bạn! Đánh giá đã được lưu (Ngoại tuyến).`);
+      } else {
+        showToast(`Cảm ơn bạn! Đánh giá đơn ${selectedOrder.id} đã được gửi.`);
+        loadOrdersFromApi();
+      }
     } catch (error) {
       Alert.alert("Lỗi", "Không thể gửi đánh giá.");
     }
@@ -179,8 +205,16 @@ export default function OrdersScreen() {
                 <View style={styles.orderHeader}>
                   <View>
                     <Text style={styles.orderId}>Mã ĐH: {order.id}</Text>
-                    <View style={{ marginTop: 6 }}>{renderPaymentBadge(order)}</View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 8 }}>
+                      {renderPaymentBadge(order)}
+                      {order.isOffline && (
+                        <View style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#FF9800' }}>
+                          <Text style={{ fontSize: 10, color: '#FF9800', fontWeight: 'bold' }}>Chờ đồng bộ</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
+                  
                   <Text style={[styles.orderStatus, { 
                     color: order.orderStatus === 'cancelled' ? '#FF6B6B' : '#FF9800' 
                   }]}>
@@ -225,32 +259,28 @@ export default function OrdersScreen() {
                   </View>
                   
                   <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                    {/* TRẠNG THÁI: CHỜ XÁC NHẬN */}
-                    {order.orderStatus === 'pending' && (
-                      isPendingQR ? (
-                        <Pressable style={styles.payNowBtn} onPress={() => { setSelectedOrder(order); setShowQR(true); }}>
-                          <Text style={styles.payNowText}>Thanh toán ngay</Text>
-                        </Pressable>
-                      ) : (
+                    {/* 🌟 HIỂN THỊ NÚT HỦY CHO CẢ PENDING VÀ CONFIRMED */}
+                    {(order.orderStatus === 'pending' || order.orderStatus === 'confirmed') && (
+                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                        {/* Chỉ hiện nút thanh toán nếu đơn pending và phương thức QR */}
+                        {order.orderStatus === 'pending' && isPendingQR && (
+                          <Pressable style={styles.payNowBtn} onPress={() => { setSelectedOrder(order); setShowQR(true); }}>
+                            <Text style={styles.payNowText}>Thanh toán ngay</Text>
+                          </Pressable>
+                        )}
+                        {/* Nút Hủy đơn hàng */}
                         <Pressable style={[styles.simulateBtn, { backgroundColor: '#FFEBEE', borderColor: '#FF6B6B' }]} onPress={() => handleCancelOrder(order)}>
                           <Text style={[styles.simulateText, { color: '#FF6B6B' }]}>Hủy đơn hàng</Text>
                         </Pressable>
-                      )
+                      </View>
                     )}
 
-                    {/* TRẠNG THÁI: CHỜ LẤY HÀNG (Khách hàng không cần bấm gì) */}
-                    {order.orderStatus === 'confirmed' && (
-                      <Text style={{ fontSize: 12, color: '#888', fontStyle: 'italic' }}>Đang chờ Shipper lấy hàng...</Text>
-                    )}
-
-                    {/* TRẠNG THÁI: CHỜ GIAO HÀNG (Khách hàng bấm đã nhận hàng khi shipper tới) */}
                     {order.orderStatus === 'shipping' && (
                       <Pressable style={[styles.simulateBtn, { backgroundColor: '#E8F5E9', borderColor: '#4CAF50' }]} onPress={() => handleCustomerReceived(order)}>
                         <Text style={[styles.simulateText, { color: '#4CAF50' }]}>Đã nhận được hàng</Text>
                       </Pressable>
                     )}
 
-                    {/* TRẠNG THÁI: ĐÃ GIAO */}
                     {order.orderStatus === 'delivered' && (
                       <Pressable style={styles.reviewBtn} onPress={() => { 
                         setSelectedOrder(order); setRating(5); setComment(''); setShowReview(true); 

@@ -12,15 +12,9 @@ import { useCart } from '../presentation/contexts/CartContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
 import { useAuth } from '../presentation/contexts/AuthContext'; 
 import { createDiaryApi } from '../services/diaryApi'; 
+import { useProducts } from '../presentation/hooks/useProducts'; // 🌟 Import hook lấy sản phẩm thật
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
-
-const mockProducts = [
-  { _id: '1', name: 'Glow Serum', detail: 'Serum dưỡng sáng da', price: '259.000đ', priceValue: 259000, image: FALLBACK_IMAGE, target: ['Da không đều màu', 'Da xỉn màu', 'Da dầu'], usage: 'Thoa 2-3 giọt lên da sạch vào buổi sáng và tối. Vỗ nhẹ để thẩm thấu.' },
-  { _id: '2', name: 'Hydra Cream', detail: 'Kem dưỡng ẩm sâu', price: '320.000đ', priceValue: 320000, image: FALLBACK_IMAGE, target: ['Da khô', 'Thiếu ẩm / Bong tróc', 'Da thường'], usage: 'Lấy một lượng vừa đủ thoa đều lên mặt sau bước dùng serum.' },
-  { _id: '3', name: 'Pure Cleanser', detail: 'Sữa rửa mặt dịu nhẹ', price: '189.000đ', priceValue: 189000, image: FALLBACK_IMAGE, target: ['Da dầu', 'Lỗ chân lông to', 'Da nhạy cảm', 'Dị ứng / Kích ứng'], usage: 'Lấy một lượng nhỏ tạo bọt, massage nhẹ nhàng trên mặt ướt, sau đó rửa sạch.' },
-  { _id: '4', name: 'La Roche-Posay', detail: 'Sữa rửa mặt cho da mụn', price: '550.000đ', priceValue: 550000, image: FALLBACK_IMAGE, target: ['Da dầu', 'Lỗ chân lông to', 'Mụn ẩn'], usage: 'Dùng 2 lần/ngày, tạo bọt và rửa sạch.' }, 
-];
 
 export default function AnalyzeScreen() {
   const router = useRouter();
@@ -28,6 +22,9 @@ export default function AnalyzeScreen() {
   const { theme } = useTheme();
   const { user } = useAuth(); 
   
+  // 🌟 Lấy danh sách sản phẩm thật từ Database
+  const { products, loading: loadingProducts } = useProducts(); 
+
   const { surveySkinType, surveyConcerns, surveyAge, surveyRoutine, surveyBudget } = useLocalSearchParams<{ 
     surveySkinType?: string, surveyConcerns?: string, surveyAge?: string, surveyRoutine?: string, surveyBudget?: string 
   }>();
@@ -37,13 +34,12 @@ export default function AnalyzeScreen() {
   const [result, setResult] = useState<any>(null);
   
   const [isSaved, setIsSaved] = useState(false);
-  const [isSaving, setIsSaving] = useState(false); // 🌟 Thêm state kiểm soát trạng thái đang lưu
+  const [isSaving, setIsSaving] = useState(false); 
 
   const [usageModalVisible, setUsageModalVisible] = useState(false);
   const [currentUsage, setCurrentUsage] = useState('');
   const [cartModalVisible, setCartModalVisible] = useState(false);
 
-  // 📸 HÀM CHỤP ẢNH TRỰC TIẾP
   const takePhoto = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
     if (permissionResult.granted === false) { 
@@ -51,18 +47,14 @@ export default function AnalyzeScreen() {
       return; 
     }
     const pickerResult = await ImagePicker.launchCameraAsync({ 
-      allowsEditing: true, 
-      aspect: [1, 1], 
-      quality: 0.8 
+      allowsEditing: true, aspect: [1, 1], quality: 0.8 
     });
     if (!pickerResult.canceled) { 
       setImage(pickerResult.assets[0].uri); 
-      setResult(null); 
-      setIsSaved(false); 
+      setResult(null); setIsSaved(false); 
     }
   };
 
-  // 🖼️ HÀM CHỌN ẢNH TỪ THƯ VIỆN
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (permissionResult.granted === false) { 
@@ -70,13 +62,11 @@ export default function AnalyzeScreen() {
       return; 
     }
     const pickerResult = await ImagePicker.launchImageLibraryAsync({ 
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, 
-      allowsEditing: true, aspect: [1, 1], quality: 0.8 
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8 
     });
     if (!pickerResult.canceled) { 
       setImage(pickerResult.assets[0].uri); 
-      setResult(null); 
-      setIsSaved(false); 
+      setResult(null); setIsSaved(false); 
     }
   };
 
@@ -84,7 +74,7 @@ export default function AnalyzeScreen() {
     if (!image) { Alert.alert('Lỗi', 'Vui lòng chọn hoặc chụp ảnh'); return; }
     setLoading(true);
     
-    // Chế độ giả lập (Mock Data)
+    // Chế độ giả lập (Mock Data cho AI)
     setTimeout(() => {
       const isAcne = Math.random() > 0.5;
       setResult({ success: true, data: { skinCondition: isAcne ? 'Acne' : 'Normal', confidence: isAcne ? 0.9563 : 0.8912 } });
@@ -93,52 +83,45 @@ export default function AnalyzeScreen() {
     }, 1500);
   };
 
+  // 🌟 LỌC SẢN PHẨM THẬT TỪ DATABASE DỰA TRÊN NGÂN SÁCH
   const getRecommendedProducts = () => {
-    if (!result) return [];
-    const skinCondition = result.data?.skinCondition; 
-    const concernsList = surveyConcerns ? surveyConcerns.split(',') : [];
-    return mockProducts.filter(prod => {
-      let matchSkin = false;
-      if (skinCondition === 'Acne' && prod.target.includes('Lỗ chân lông to')) matchSkin = true;
-      if (prod.target.some(t => concernsList.includes(t) || prod.target.includes(surveySkinType || ''))) matchSkin = true;
-      if (!matchSkin) return false;
+    if (!result || !products) return [];
+    
+    return products.filter((prod: any) => {
       if (!surveyBudget || surveyBudget === 'Không quan trọng') return true;
-      if (surveyBudget === 'Dưới 200k') return prod.priceValue < 200000;
-      if (surveyBudget === '200k - 500k') return prod.priceValue >= 200000 && prod.priceValue <= 500000;
-      if (surveyBudget === 'Trên 500k') return prod.priceValue > 500000;
+      
+      const price = Number(prod.price); // Đảm bảo là kiểu số
+      if (surveyBudget === 'Dưới 200k') return price < 200000;
+      if (surveyBudget === '200k - 500k') return price >= 200000 && price <= 500000;
+      if (surveyBudget === 'Trên 500k') return price > 500000;
+      
       return true;
-    }).slice(0, 3); 
+    }).slice(0, 3); // Lấy 3 sản phẩm phù hợp đầu tiên
   };
 
   const recommendedProducts = getRecommendedProducts();
 
   const handleShowUsage = (usage: string) => {
-    setCurrentUsage(usage);
+    setCurrentUsage(usage || 'Thoa một lượng vừa đủ lên da sạch, massage nhẹ nhàng đến khi thẩm thấu.');
     setUsageModalVisible(true);
   };
 
   const handleAddToCart = async (product: any) => {
+    // product ở đây đã là sản phẩm thật từ DB, có _id chuẩn của MongoDB
     await addToCart(product, 1, 'Mặc định'); 
     setCartModalVisible(true);
   };
 
-  // 🌟 CẬP NHẬT HÀM LƯU: THÊM CHỐNG SPAM & TRẠNG THÁI CHỜ
   const saveToDiary = async () => {
-    // Nếu đã lưu thành công hoặc đang trong quá trình lưu thì không làm gì cả
     if (isSaved || isSaving) return; 
-    
-    setIsSaving(true); // Bật trạng thái đang lưu
+    setIsSaving(true); 
 
     try {
       const diaryData = {
         skinCondition: result.data.skinCondition, 
         confidence: result.data.confidence,
         survey: { 
-          type: surveySkinType, 
-          concerns: surveyConcerns, 
-          age: surveyAge, 
-          routine: surveyRoutine, 
-          budget: surveyBudget 
+          type: surveySkinType, concerns: surveyConcerns, age: surveyAge, routine: surveyRoutine, budget: surveyBudget 
         }
       };
 
@@ -146,17 +129,14 @@ export default function AnalyzeScreen() {
       
       if (res.success) {
         setIsSaved(true);
-        if (Platform.OS === 'web') {
-          window.alert("Đã lưu kết quả vào Nhật ký da!");
-        } else {
-          Alert.alert("Thành công", "Đã lưu kết quả vào Nhật ký da!");
-        }
+        if (Platform.OS === 'web') window.alert("Đã lưu kết quả vào Nhật ký da!");
+        else Alert.alert("Thành công", "Đã lưu kết quả vào Nhật ký da!");
       }
     } catch (error) { 
       Alert.alert('Lỗi', 'Không thể lưu dữ liệu vào Database.'); 
       console.log(error);
     } finally {
-      setIsSaving(false); // Luôn tắt trạng thái chờ dù thành công hay thất bại
+      setIsSaving(false); 
     }
   };
 
@@ -176,7 +156,6 @@ export default function AnalyzeScreen() {
         <Text style={dynamicStyles.title}>Tải ảnh lên để phân tích</Text>
         <Text style={dynamicStyles.subtitle}>Chụp rõ khuôn mặt, không đeo kính, ánh sáng tốt.</Text>
 
-        {/* KHUNG HIỂN THỊ ẢNH */}
         <View style={dynamicStyles.imagePicker}>
           {image ? (
             <Image source={{ uri: image }} style={dynamicStyles.image} />
@@ -188,7 +167,6 @@ export default function AnalyzeScreen() {
           )}
         </View>
 
-        {/* CÁC NÚT CHỌN ẢNH */}
         <View style={dynamicStyles.actionRow}>
           <Pressable style={[dynamicStyles.chooseBtn, { backgroundColor: theme.primary }]} onPress={takePhoto}>
             <Ionicons name="camera" size={20} color="#FFFFFF" />
@@ -227,14 +205,15 @@ export default function AnalyzeScreen() {
               <View style={dynamicStyles.recommendSection}>
                 <Text style={dynamicStyles.recommendTitle}>✨ Sản phẩm gợi ý dành riêng cho bạn</Text>
                 <View style={dynamicStyles.productList}>
-                  {recommendedProducts.map(product => (
+                  {recommendedProducts.map((product: any) => (
                     <View key={product._id} style={dynamicStyles.productCard}>
                       <View style={dynamicStyles.productInfoRow}>
-                        <Image source={{ uri: product.image }} style={dynamicStyles.productImage} />
+                        <Image source={{ uri: product.image || FALLBACK_IMAGE }} style={dynamicStyles.productImage} />
                         <View style={dynamicStyles.productTextContent}>
                           <Text style={dynamicStyles.productName}>{product.name}</Text>
-                          <Text style={dynamicStyles.productDetail}>{product.detail}</Text>
-                          <Text style={dynamicStyles.productPrice}>{product.price}</Text>
+                          {/* 🌟 Hiển thị brand thay vì detail nếu DB chưa có detail */}
+                          <Text style={dynamicStyles.productDetail}>{product.brand || product.category}</Text>
+                          <Text style={dynamicStyles.productPrice}>{Number(product.price).toLocaleString('vi-VN')}đ</Text>
                         </View>
                       </View>
                       <View style={dynamicStyles.actionRow}>
@@ -256,29 +235,17 @@ export default function AnalyzeScreen() {
               <View style={{ marginTop: 10, alignItems: 'center' }}><Text style={{ color: theme.textMuted, fontStyle: 'italic', textAlign: 'center' }}>Không tìm thấy sản phẩm phù hợp với ngân sách của bạn.</Text></View>
             )}
 
-            {/* 🌟 CẬP NHẬT NÚT LƯU VỚI TRẠNG THÁI LOADING */}
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
               <Pressable 
-                style={[
-                  dynamicStyles.saveDiaryButton, 
-                  isSaved && dynamicStyles.saveDiaryButtonSaved,
-                  isSaving && { opacity: 0.7 } // Làm mờ nút khi đang lưu
-                ]} 
+                style={[dynamicStyles.saveDiaryButton, isSaved && dynamicStyles.saveDiaryButtonSaved, isSaving && { opacity: 0.7 }]} 
                 onPress={saveToDiary} 
-                disabled={isSaved || isSaving} // Vô hiệu hóa nếu đang lưu hoặc đã lưu
+                disabled={isSaved || isSaving} 
               >
                 {isSaving ? (
-                  <>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text style={dynamicStyles.saveDiaryText}>Đang lưu...</Text>
-                  </>
+                  <><ActivityIndicator size="small" color="#FFFFFF" /><Text style={dynamicStyles.saveDiaryText}>Đang lưu...</Text></>
                 ) : (
-                  <>
-                    <Ionicons name={isSaved ? "checkmark-circle" : "bookmark-outline"} size={20} color={isSaved ? "#49313C" : "#FFFFFF"} />
-                    <Text style={[dynamicStyles.saveDiaryText, isSaved && { color: '#49313C' }]}>
-                      {isSaved ? "Đã lưu vào Nhật ký" : "Lưu vào Nhật ký da"}
-                    </Text>
-                  </>
+                  <><Ionicons name={isSaved ? "checkmark-circle" : "bookmark-outline"} size={20} color={isSaved ? "#49313C" : "#FFFFFF"} />
+                  <Text style={[dynamicStyles.saveDiaryText, isSaved && { color: '#49313C' }]}>{isSaved ? "Đã lưu vào Nhật ký" : "Lưu vào Nhật ký da"}</Text></>
                 )}
               </Pressable>
               {isSaved && (<Pressable style={dynamicStyles.viewDiaryButton} onPress={() => router.replace('/diary')}><Ionicons name="arrow-forward" size={20} color="#FFFFFF" /></Pressable>)}

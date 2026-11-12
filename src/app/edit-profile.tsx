@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../data/datasources/remote/api';
 import { useAuth } from '../presentation/contexts/AuthContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
+import { addToOfflineQueue } from '../services/offlineSync';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -42,25 +43,40 @@ export default function EditProfileScreen() {
       return;
     }
 
+    // 🌟 1. KHAI BÁO PAYLOAD Ở ĐÂY (NGOÀI TRY/CATCH)
+    const payload = { 
+      fullName: fullName, 
+      phone: phone,
+      newEmail: isChangingEmail ? newEmail : undefined,
+      currentPassword: (isChangingEmail || isChangingPass) ? currentPassword : undefined,
+      newPassword: isChangingPass ? newPassword : undefined
+    };
+
     setLoading(true);
     try {
-      const payload = { 
-        fullName: fullName, 
-        phone: phone,
-        newEmail: isChangingEmail ? newEmail : undefined,
-        currentPassword: (isChangingEmail || isChangingPass) ? currentPassword : undefined,
-        newPassword: isChangingPass ? newPassword : undefined
-      };
-
-      // Gọi API cập nhật (đảm bảo Backend của bạn có route PUT /api/auth/profile)
+      // 2. Gọi API cập nhật
       const res = await api.put('/api/auth/profile', payload);
       
       if (res.data.success) {
-        updateUser(res.data.data); // Cập nhật lại Context để giao diện thay đổi ngay
+        updateUser(res.data.data);
         showAlert('Thành công', 'Cập nhật hồ sơ thành công!', () => router.back());
       }
     } catch (error: any) {
-      // Bắt lỗi chi tiết từ Backend trả về
+      // 3. Bây giờ catch đã có thể dùng được biến payload
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        await addToOfflineQueue('PUT', '/api/auth/profile', payload);
+        
+        updateUser({
+          ...user,
+          fullName: payload.fullName,
+          phone: payload.phone,
+          email: payload.newEmail || user?.email
+        });
+        
+        showAlert('Lưu ngoại tuyến', 'Đã lưu thay đổi vào máy. Dữ liệu sẽ tự động đồng bộ khi có mạng!', () => router.back());
+        return;
+      }
+
       const msg = error.response?.data?.message || error.message || 'Lỗi không xác định';
       showAlert('Lỗi cập nhật', msg);
     } finally {
@@ -68,7 +84,6 @@ export default function EditProfileScreen() {
     }
   };
 
-  // Hàm hiển thị thông báo hỗ trợ cả Web và Mobile
   const showAlert = (title: string, message: string, onOk?: () => void) => {
     if (Platform.OS === 'web') {
       window.alert(`${title}: ${message}`);
