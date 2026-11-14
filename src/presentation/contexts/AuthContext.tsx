@@ -73,9 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Hàm dùng cho Đăng nhập Google (Firebase)
   const setAuthData = async (userData: any, token: string) => {
-    setUser(userData);
     await AsyncStorage.setItem('@user', JSON.stringify(userData));
     await AsyncStorage.setItem('@token', token);
+    setUser(userData);
   };
 
   // Hàm đăng xuất

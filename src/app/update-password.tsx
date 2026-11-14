@@ -8,7 +8,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -19,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { storage } from '../data/datasources/local/storage';
 import { authService } from '../data/datasources/remote/authService';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function UpdatePasswordScreen() {
   const router = useRouter();

@@ -24,9 +24,13 @@ function RootLayoutNav() {
   useEffect(() => {
     if (loading) return;
 
-    // Kiểm tra xem user đang đứng ở khu vực nào (auth group hay app group)
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'forgot-password';
-
+    
+    const inAuthGroup = 
+      segments[0] === 'login' || 
+      segments[0] === 'register' || 
+      segments[0] === 'forgot-password' || 
+      segments[0] === 'verify-code' || 
+      segments[0] === 'update-password';
     if (!user && !inAuthGroup) {
       // Nếu chưa đăng nhập mà không ở trang auth -> Đá về login
       router.replace('/login');

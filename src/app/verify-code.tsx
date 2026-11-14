@@ -1,11 +1,12 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, ScrollView, Image,
-  KeyboardAvoidingView, Platform, SafeAreaView, Alert, ActivityIndicator,
+  KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { authService } from '../data/datasources/remote/authService';
 import { storage } from '../data/datasources/local/storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CODE_LENGTH = 4;
 

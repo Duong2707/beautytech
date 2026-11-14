@@ -8,7 +8,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -18,6 +17,7 @@ import { ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../presentation/contexts/AuthContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function RegisterScreen() {
   const router = useRouter();

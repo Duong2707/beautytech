@@ -8,7 +8,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -23,6 +22,7 @@ import { useAuth } from '../presentation/contexts/AuthContext';
 import { auth, googleProvider } from '../data/datasources/remote/firebase';
 import api from '../data/datasources/remote/api';
 import { signInWithPopup } from 'firebase/auth';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const WEB_LOGIN_URL = 'https://enchanting-fox-9000a8.netlify.app';
 
@@ -94,6 +94,7 @@ export default function LoginScreen() {
       return;
     }
 
+    // Xử lý cho Web (giữ nguyên)
     if (Platform.OS === 'web') {
       setSocialLoading(true);
       try {
@@ -101,7 +102,6 @@ export default function LoginScreen() {
         const idToken = await result.user.getIdToken();
         await handleFirebaseToken(idToken);
       } catch (error: any) {
-        // Firebase cũng có lỗi mạng
         let message = error.message || 'Đăng nhập Google thất bại';
         if (error.code === 'auth/network-request-failed') {
           message = 'Không có kết nối Internet. Vui lòng kiểm tra lại mạng!';
@@ -111,14 +111,37 @@ export default function LoginScreen() {
       }
       return;
     }
+
+    // Xử lý cho Mobile (Android/iOS)
     setSocialLoading(true);
-    const redirectUrl = Linking.createURL('callback');
+    const redirectUrl = Linking.createURL('callback'); // Sẽ ra beautytech://callback
     const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
+    
     try {
-      await WebBrowser.openBrowserAsync(authUrl);
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+
+      if (result.type === 'success') {
+        const { url } = result;
+        console.log("👉 Link trả về từ Google:", url);
+        
+        // 👇 GIỮ LẠI ĐOẠN NÀY (Dùng Linking.parse)
+        const parsedUrl = Linking.parse(url);
+        const idToken = parsedUrl.queryParams?.idToken as string; 
+        
+        if (idToken) {
+          await handleFirebaseToken(idToken); 
+        } else {
+          showAlert('Lỗi', 'Không lấy được idToken từ Google!');
+        }
+
+      } else {
+        console.log('Người dùng đã hủy đăng nhập');
+      }
     } catch (error) {
+      console.error(error);
       showAlert('Lỗi', 'Không mở được trình duyệt');
-      setSocialLoading(false);
+    } finally {
+      setSocialLoading(false); 
     }
   };
 
@@ -128,6 +151,7 @@ export default function LoginScreen() {
       return;
     }
 
+    // Xử lý cho Web
     if (Platform.OS === 'web') {
       setSocialLoading(true);
       const redirectUrl = `${window.location.origin}/callback`;
@@ -135,14 +159,38 @@ export default function LoginScreen() {
       window.location.href = authUrl;
       return;
     }
+
+    // Xử lý cho Mobile (Android/iOS)
     setSocialLoading(true);
     const redirectUrl = Linking.createURL('callback');
     const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
+    
     try {
-      await WebBrowser.openBrowserAsync(authUrl);
+      // 👇 Đổi openBrowserAsync thành openAuthSessionAsync để đợi người dùng tương tác
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+      
+      if (result.type === 'success') {
+        const { url } = result;
+        console.log("👉 Link trả về từ Facebook:", url);
+        
+        // Xử lý token tương tự bên Google (Tùy thuộc Netlify của bạn trả về idToken hay accessToken)
+        const parsedUrl = Linking.parse(url);
+        const idToken = parsedUrl.queryParams?.idToken as string; 
+        
+        if (idToken) {
+          await handleFirebaseToken(idToken);
+        } else {
+          showAlert('Lỗi', 'Không lấy được token từ Facebook!');
+        }
+      } else {
+        console.log('Người dùng đã hủy đăng nhập Facebook');
+      }
     } catch (error) {
+      console.error(error);
       showAlert('Lỗi', 'Không mở được trình duyệt');
-      setSocialLoading(false);
+    } finally {
+      // 👇 CỰC KỲ QUAN TRỌNG: Dù thành công, thất bại hay HỦY NGANG, cũng phải tắt Loading!
+      setSocialLoading(false); 
     }
   };
 

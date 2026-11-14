@@ -9,13 +9,13 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { authService } from '../data/datasources/remote/authService';
 import { storage } from '../data/datasources/local/storage';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
