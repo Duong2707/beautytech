@@ -51,7 +51,6 @@ export default function LoginScreen() {
       const response = await api.post('/api/auth/firebase-login', { idToken });
       const { token, ...userData } = response.data.data;
       await setAuthData(userData, token);
-      router.replace('/home'); 
     } catch (error: any) {
       let message = error?.response?.data?.message || 'Đăng nhập thất bại';
       
@@ -74,11 +73,6 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email, password, isAdminMode);
-      if (isAdminMode) {
-        router.replace('/admin'); 
-      } else {
-        router.replace('/home');  
-      }
     } catch (error: any) {
       // Lấy câu thông báo lỗi từ Backend trả về (VD: "Email hoặc password không đúng")
       let message = error?.response?.data?.message || 'Đăng nhập thất bại';

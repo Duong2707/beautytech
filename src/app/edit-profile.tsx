@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
-// @ts-ignore
-import { ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+// 👇 1. Import thư viện vừa cài
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+
 import api from '../data/datasources/remote/api';
 import { useAuth } from '../presentation/contexts/AuthContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
@@ -43,7 +44,6 @@ export default function EditProfileScreen() {
       return;
     }
 
-    // 🌟 1. KHAI BÁO PAYLOAD Ở ĐÂY (NGOÀI TRY/CATCH)
     const payload = { 
       fullName: fullName, 
       phone: phone,
@@ -54,7 +54,6 @@ export default function EditProfileScreen() {
 
     setLoading(true);
     try {
-      // 2. Gọi API cập nhật
       const res = await api.put('/api/auth/profile', payload);
       
       if (res.data.success) {
@@ -62,7 +61,6 @@ export default function EditProfileScreen() {
         showAlert('Thành công', 'Cập nhật hồ sơ thành công!', () => router.back());
       }
     } catch (error: any) {
-      // 3. Bây giờ catch đã có thể dùng được biến payload
       if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
         await addToOfflineQueue('PUT', '/api/auth/profile', payload);
         
@@ -105,7 +103,16 @@ export default function EditProfileScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* 👇 2. Thay thế bằng KeyboardAwareScrollView (Tự động xử lý bàn phím cho cả iOS & Android) */}
+      <KeyboardAwareScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.content}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        extraScrollHeight={100} // Đẩy thêm 100px để không bị sát mép bàn phím
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.avatarContainer}>
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarText}>{fullName.charAt(0).toUpperCase() || 'U'}</Text>
@@ -156,7 +163,7 @@ export default function EditProfileScreen() {
         <Pressable style={styles.saveButton} onPress={handleSave} disabled={loading}>
           {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Lưu thay đổi</Text>}
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -166,7 +173,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15 },
   backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.isDark ? '#2A2A2A' : '#F8EDF0', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
-  content: { padding: 20 },
+  content: { padding: 20, paddingBottom: 50 },
   avatarContainer: { alignItems: 'center', marginBottom: 20 },
   avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 40, fontWeight: 'bold', color: '#FFF' },

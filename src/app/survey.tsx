@@ -49,8 +49,9 @@ export default function SurveyScreen() {
     <SafeAreaView style={dynamicStyles.screen}>
       {/* 🌟 ĐÃ XÓA backgroundColor ĐỂ HẾT LỖI TS */}
       <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
-      
+      <View style={{paddingTop: 40}} /> 
       <View style={dynamicStyles.header}>
+        
         <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace("/home")}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />
         </Pressable>

@@ -80,9 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Hàm đăng xuất
   const logout = async () => {
-    setUser(null);
     await AsyncStorage.removeItem('@user');
     await AsyncStorage.removeItem('@token');
+    setUser(null); 
   };
 
   // Hàm cập nhật thông tin user (dùng cho Edit Profile)

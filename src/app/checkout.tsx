@@ -234,6 +234,7 @@ export default function CheckoutScreen() {
 
   return (
     <SafeAreaView style={dynamicStyles.screen}>
+      <View style={{paddingTop: 40}} /> 
       <View style={dynamicStyles.header}>
         <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/cart')}>
           <Ionicons name="chevron-back" size={24} color={theme.text} />

@@ -1,6 +1,5 @@
-import React, { useState, useRef } from 'react';
-// @ts-ignore
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../presentation/contexts/ThemeContext';
@@ -9,7 +8,6 @@ import { sendMessageToAI } from '../services/aiApi';
 export default function ChatScreen() {
   const { theme } = useTheme();
   
-  // 👇 Sửa type của useRef để hết lỗi
   const scrollViewRef = useRef<any>(null);
   
   const [inputText, setInputText] = useState("");
@@ -19,7 +17,20 @@ export default function ChatScreen() {
     { id: '1', role: 'model', text: 'Xin chào! Mình là BeautyTech AI. Bạn cần tư vấn gì về tình trạng da hôm nay không?' }
   ]);
 
-    const handleSend = async () => {
+  // 👇 Tự động cuộn xuống cuối khi bàn phím bật lên (Quan trọng cho Android)
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      () => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }
+    );
+    return () => {
+      keyboardDidShowListener.remove();
+    };
+  }, []);
+
+  const handleSend = async () => {
     if (!inputText.trim() || isLoading) return;
 
     const userMsg = inputText.trim();
@@ -42,8 +53,6 @@ export default function ChatScreen() {
       
     } catch (error: any) {
       let errorMessage = '';
-      
-      // 🌟 KIỂM TRA LỖI MẠNG VÀ TRẢ VỀ CÂU CỐ ĐỊNH
       if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
         errorMessage = '📶 Kết nối mạng đang gián đoạn. BeautyTech AI cần Internet để hoạt động. Bạn vui lòng kiểm tra lại Wifi/4G và thử lại nhé!';
       } else if (error.message?.includes('401')) {
@@ -51,7 +60,6 @@ export default function ChatScreen() {
       } else {
         errorMessage = 'Hệ thống AI đang bận một chút, bạn thử lại sau nhé!';
       }
-      
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'model', text: errorMessage }]);
     } finally {
       setIsLoading(false);
@@ -64,7 +72,7 @@ export default function ChatScreen() {
     <SafeAreaView style={dynamicStyles.screen}>
       <View style={{ width: 70, paddingTop: 30}} /> 
       <View style={dynamicStyles.header}>
-        <Pressable style={dynamicStyles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace('/home')}>
+        <Pressable style={dynamicStyles.backButton} onPress={() => router.replace('/home')}>
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </Pressable>
         <View style={{ alignItems: 'center'}}>
@@ -74,12 +82,16 @@ export default function ChatScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      {/* 👇 SỬA BEHAVIOR THÀNH 'height' CHO ANDROID */}
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView ref={scrollViewRef as any} onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        <ScrollView 
+          ref={scrollViewRef} 
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
           contentContainerStyle={dynamicStyles.chatContainer}
+          keyboardShouldPersistTaps="handled" // Giúp bấm nút Send khi đang mở bàn phím
         >
           {messages.map((msg) => (
             <View 
@@ -136,6 +148,7 @@ export default function ChatScreen() {
   );
 }
 
+// Styles giữ nguyên...
 const getStyles = (theme: any) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15, backgroundColor: theme.card, borderBottomWidth: 1, borderBottomColor: theme.border },

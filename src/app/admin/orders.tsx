@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { fetchOrdersApi, updateOrderStatusApi } from "../../services/orderApi";
+import { useAuth } from "../../presentation/contexts/AuthContext";
 
 const PINK = "#E88BA8";
 const DARK = "#30242A";
@@ -70,6 +71,7 @@ const statusInfo: Record<string, { label: string; color: string; background: str
 
 export default function AdminOrdersScreen() {
   const router = useRouter();
+  const { logout } = useAuth();
   const { width } = useWindowDimensions();
   const isMobile = width < 760;
 
@@ -241,7 +243,9 @@ export default function AdminOrdersScreen() {
             <Text style={styles.adminRole}>Quản trị viên</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace("/login")}>
+        <TouchableOpacity style={styles.logoutButton} onPress={async () => {
+            await logout();
+          }}>
           <Ionicons name="log-out-outline" size={20} color="#C45B83" />
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>

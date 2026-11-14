@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-// @ts-ignore
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, SafeAreaView, Modal, TextInput, ActivityIndicator, Alert, Pressable, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, ActivityIndicator, Alert, Pressable, Platform, KeyboardAvoidingView, Keyboard, TouchableWithoutFeedback } from 'react-native';
+// 👇 Dùng SafeAreaView chuẩn từ thư viện safe-area-context để hết cảnh báo vàng
+import { SafeAreaView } from 'react-native-safe-area-context'; 
+
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../presentation/contexts/AuthContext'; 
 import { fetchAddresses, createAddress, updateAddress, deleteAddress } from '../services/addressApi';
-import { onOfflineSyncCompleted } from '../services/offlineSync'; // 🌟 Import hàm lắng nghe
-
+import { onOfflineSyncCompleted } from '../services/offlineSync';
 interface Address {
   _id: string;
   name: string;
@@ -205,30 +206,50 @@ export default function ShippingAddressScreen() {
       </ScrollView>
 
       <Modal visible={isModalVisible} animationType="slide" transparent={true}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={dynamicStyles.modalOverlay}>
-            <View style={dynamicStyles.modalContent}>
-              <Text style={dynamicStyles.modalTitle}>{editingId ? "Sửa địa chỉ" : "Thêm địa chỉ mới"}</Text>
-              
-              <TextInput style={dynamicStyles.input} placeholder="Họ và tên" value={formData.name} onChangeText={(text) => setFormData({...formData, name: text})} />
-              <TextInput style={dynamicStyles.input} placeholder="Số điện thoại" keyboardType="phone-pad" value={formData.phone} onChangeText={(text) => setFormData({...formData, phone: text})} />
-              <TextInput style={[dynamicStyles.input, { height: 80, textAlignVertical: 'top' }]} placeholder="Địa chỉ chi tiết..." multiline value={formData.address} onChangeText={(text) => setFormData({...formData, address: text})} />
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={{ flex: 1 }}
+        >
+          {/* 👇 1. Vùng nền đen: Bấm vào đây sẽ tắt panel */}
+          <Pressable 
+            style={dynamicStyles.modalOverlay} 
+            onPress={() => setModalVisible(false)}
+          >
+            
+            {/* 👇 2. Vùng panel trắng: Bấm vào đây sẽ tắt bàn phím (không bị tắt panel) */}
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <View style={dynamicStyles.modalContent}>
+                
+                <ScrollView 
+                  keyboardShouldPersistTaps="handled" 
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                >
+                  <Text style={dynamicStyles.modalTitle}>{editingId ? "Sửa địa chỉ" : "Thêm địa chỉ mới"}</Text>
+                  
+                  <TextInput style={dynamicStyles.input} placeholder="Họ và tên" value={formData.name} onChangeText={(text) => setFormData({...formData, name: text})} />
+                  <TextInput style={dynamicStyles.input} placeholder="Số điện thoại" keyboardType="phone-pad" value={formData.phone} onChangeText={(text) => setFormData({...formData, phone: text})} />
+                  <TextInput style={[dynamicStyles.input, { height: 80, textAlignVertical: 'top' }]} placeholder="Địa chỉ chi tiết..." multiline value={formData.address} onChangeText={(text) => setFormData({...formData, address: text})} />
 
-              <Pressable style={dynamicStyles.checkboxRow} onPress={toggleDefault}>
-                <Ionicons name={formData.isDefault ? "checkbox" : "square-outline"} size={26} color={formData.isDefault ? "#E91E63" : "#888"} />
-                <Text style={{ marginLeft: 10, color: '#333', fontSize: 15 }}>Đặt làm địa chỉ mặc định</Text>
-              </Pressable>
+                  <Pressable style={dynamicStyles.checkboxRow} onPress={toggleDefault}>
+                    <Ionicons name={formData.isDefault ? "checkbox" : "square-outline"} size={26} color={formData.isDefault ? "#E91E63" : "#888"} />
+                    <Text style={{ marginLeft: 10, color: '#333', fontSize: 15 }}>Đặt làm địa chỉ mặc định</Text>
+                  </Pressable>
 
-              <View style={dynamicStyles.modalActions}>
-                <TouchableOpacity style={[dynamicStyles.modalBtn, { backgroundColor: '#EEE' }]} onPress={() => setModalVisible(false)}>
-                  <Text style={{ color: '#333', fontWeight: 'bold' }}>Hủy bỏ</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[dynamicStyles.modalBtn, { backgroundColor: '#E91E63' }]} onPress={handleSave}>
-                  <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Lưu</Text>
-                </TouchableOpacity>
+                  <View style={dynamicStyles.modalActions}>
+                    <TouchableOpacity style={[dynamicStyles.modalBtn, { backgroundColor: '#EEE' }]} onPress={() => setModalVisible(false)}>
+                      <Text style={{ color: '#333', fontWeight: 'bold' }}>Hủy bỏ</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[dynamicStyles.modalBtn, { backgroundColor: '#E91E63' }]} onPress={handleSave}>
+                      <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Lưu</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+
               </View>
-            </View>
-          </View>
+            </TouchableWithoutFeedback>
+
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
@@ -256,7 +277,7 @@ const getStyles = () => StyleSheet.create({
   addButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E91E63', borderRadius: 12, paddingVertical: 14, marginTop: 8, borderStyle: 'dashed' },
   addButtonText: { color: '#E91E63', fontSize: 16, fontWeight: '600', marginLeft: 8 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, minHeight: 400, paddingBottom: 40 },
+  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%', paddingBottom: Platform.OS === 'ios' ? 40 : 20 }, 
   modalTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20, color: '#333' },
   input: { borderWidth: 1, borderColor: '#DDD', borderRadius: 8, padding: 12, marginBottom: 15, fontSize: 16 },
   checkboxRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingVertical: 5 },

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, Modal, Alert, useWindowDimensions, ActivityIndicator, Pressable
+  View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, Modal, Alert, useWindowDimensions, ActivityIndicator, Pressable,  KeyboardAvoidingView, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import api from '../../data/datasources/remote/api';
+import { useAuth } from '../../presentation/contexts/AuthContext'; 
 
 type Voucher = {
   _id: string;
@@ -37,6 +38,7 @@ const formatMoney = (value: number) => value.toLocaleString('vi-VN') + 'đ';
 
 export default function AdminVouchersScreen() {
   const router = useRouter();
+  const { logout } = useAuth(); 
   const { width } = useWindowDimensions();
   const isMobile = width < 760;
 
@@ -206,7 +208,7 @@ export default function AdminVouchersScreen() {
           <View style={styles.adminAvatar}><Ionicons name="person" size={19} color={PINK} /></View>
           <View style={{ flex: 1 }}><Text style={styles.adminName}>Administrator</Text><Text style={styles.adminRole}>Quản trị viên</Text></View>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace('/login')}>
+        <TouchableOpacity style={styles.logoutButton} onPress={async() => await logout()}>
           <Ionicons name="log-out-outline" size={20} color="#C45B83" /><Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>
       </View>
@@ -325,52 +327,68 @@ export default function AdminVouchersScreen() {
         </ScrollView>
       </View>
 
+      {/* MODAL TẠO / SỬA VOUCHER */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.overlay}>
-          <View style={styles.modalCard}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Text style={styles.modalTitle}>{editingId !== null ? 'Chỉnh sửa Voucher' : 'Tạo Voucher mới'}</Text>
-              <Text style={styles.modalSubtitle}>Điền thông tin chương trình giảm giá</Text>
+        
+        {/* 👇 Bọc nội dung bằng KeyboardAvoidingView */}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={{ flex: 1 }}
+        >
+          <Pressable style={styles.overlay} onPress={() => setModalVisible(false)}>
+            <View style={styles.modalCard} onStartShouldSetResponder={() => true} >
+              
+              {/* ScrollView đã có sẵn keyboardShouldPersistTaps="handled" nên rất tốt */}
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 20 }}
+              >
+                <Text style={styles.modalTitle}>{editingId !== null ? 'Chỉnh sửa Voucher' : 'Tạo Voucher mới'}</Text>
+                <Text style={styles.modalSubtitle}>Điền thông tin chương trình giảm giá</Text>
 
-              <Text style={styles.inputLabel}>Mã voucher</Text>
-              <TextInput style={styles.input} placeholder="Ví dụ: BEAUTY20" autoCapitalize="characters" value={code} onChangeText={setCode} />
+                <Text style={styles.inputLabel}>Mã voucher</Text>
+                <TextInput style={styles.input} placeholder="Ví dụ: BEAUTY20" autoCapitalize="characters" value={code} onChangeText={setCode} />
 
-              <Text style={styles.inputLabel}>Mô tả</Text>
-              <TextInput style={styles.input} placeholder="Mô tả chương trình ưu đãi" value={description} onChangeText={setDescription} />
+                <Text style={styles.inputLabel}>Mô tả</Text>
+                <TextInput style={styles.input} placeholder="Mô tả chương trình ưu đãi" value={description} onChangeText={setDescription} />
 
-              <Text style={styles.inputLabel}>Loại giảm giá</Text>
-              <View style={styles.typeRow}>
-                <TouchableOpacity style={[styles.typeButton, type === 'percent' && styles.typeActive]} onPress={() => setType('percent')}>
-                  <Text style={[styles.typeText, type === 'percent' && styles.typeTextActive]}>Phần trăm (%)</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.typeButton, type === 'fixed' && styles.typeActive]} onPress={() => setType('fixed')}>
-                  <Text style={[styles.typeText, type === 'fixed' && styles.typeTextActive]}>Số tiền (VNĐ)</Text>
-                </TouchableOpacity>
-              </View>
+                <Text style={styles.inputLabel}>Loại giảm giá</Text>
+                <View style={styles.typeRow}>
+                  <TouchableOpacity style={[styles.typeButton, type === 'percent' && styles.typeActive]} onPress={() => setType('percent')}>
+                    <Text style={[styles.typeText, type === 'percent' && styles.typeTextActive]}>Phần trăm (%)</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.typeButton, type === 'fixed' && styles.typeActive]} onPress={() => setType('fixed')}>
+                    <Text style={[styles.typeText, type === 'fixed' && styles.typeTextActive]}>Số tiền (VNĐ)</Text>
+                  </TouchableOpacity>
+                </View>
 
-              <Text style={styles.inputLabel}>Giá trị giảm {type === 'percent' ? '(%)' : '(VNĐ)'}</Text>
-              <TextInput style={styles.input} placeholder={type === 'percent' ? 'Ví dụ: 15' : 'Ví dụ: 50000'} keyboardType="numeric" value={value} onChangeText={setValue} />
+                <Text style={styles.inputLabel}>Giá trị giảm {type === 'percent' ? '(%)' : '(VNĐ)'}</Text>
+                <TextInput style={styles.input} placeholder={type === 'percent' ? 'Ví dụ: 15' : 'Ví dụ: 50000'} keyboardType="numeric" value={value} onChangeText={setValue} />
 
-              <Text style={styles.inputLabel}>Giá trị đơn hàng tối thiểu (VNĐ)</Text>
-              <TextInput style={styles.input} placeholder="Ví dụ: 200000" keyboardType="numeric" value={minOrder} onChangeText={setMinOrder} />
+                <Text style={styles.inputLabel}>Giá trị đơn hàng tối thiểu (VNĐ)</Text>
+                <TextInput style={styles.input} placeholder="Ví dụ: 200000" keyboardType="numeric" value={minOrder} onChangeText={setMinOrder} />
 
-              <Text style={styles.inputLabel}>Số lượng voucher</Text>
-              <TextInput style={styles.input} placeholder="Ví dụ: 100" keyboardType="numeric" value={quantity} onChangeText={setQuantity} />
+                <Text style={styles.inputLabel}>Số lượng voucher</Text>
+                <TextInput style={styles.input} placeholder="Ví dụ: 100" keyboardType="numeric" value={quantity} onChangeText={setQuantity} />
 
-              <Text style={styles.inputLabel}>Ngày hết hạn (YYYY-MM-DD)</Text>
-              <TextInput style={styles.input} placeholder="2026-12-31" value={expiry} onChangeText={setExpiry} />
+                <Text style={styles.inputLabel}>Ngày hết hạn (YYYY-MM-DD)</Text>
+                <TextInput style={styles.input} placeholder="2026-12-31" value={expiry} onChangeText={setExpiry} />
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.cancelText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={saveVoucher}>
-                  <Text style={styles.saveText}>Lưu voucher</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+                    <Text style={styles.cancelText}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.saveButton} onPress={saveVoucher}>
+                    <Text style={styles.saveText}>Lưu voucher</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+
+            </View>
+          </Pressable >
+        </KeyboardAvoidingView>
+
       </Modal>
     </View>
   );

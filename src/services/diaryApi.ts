@@ -83,12 +83,14 @@ export const deleteDiaryApi = async (id: string) => {
 // 4. Xóa toàn bộ (Có Offline Queue)
 export const clearDiaryApi = async () => {
   try {
-    const res = await api.delete('/api/skin-diary');
+    // 👇 SỬA TẠI ĐÂY: Thêm chữ '/clear' vào sau
+    const res = await api.delete('/api/skin-diary/clear'); 
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify([])); 
     return res.data;
   } catch (error: any) {
     if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
-      await addToOfflineQueue('DELETE', '/api/skin-diary/clear-all', null);
+      // 👇 SỬA TẠI ĐÂY: Đổi 'clear-all' thành 'clear' cho khớp Backend
+      await addToOfflineQueue('DELETE', '/api/skin-diary/clear', null);
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify([])); 
       return { success: true, isOffline: true };
     }

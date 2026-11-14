@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import api from '../../data/datasources/remote/api';
 import { fetchOrdersApi } from '../../services/orderApi';
+import { useAuth } from '../../presentation/contexts/AuthContext';
 
 const PINK = '#E88BA8';
 const DARK = '#30242A';
@@ -50,6 +51,7 @@ const getOrderStatusInfo = (status: string) => {
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { logout } = useAuth();
   const { width } = useWindowDimensions();
   const isMobile = width < 760;
 
@@ -185,7 +187,12 @@ export default function AdminDashboard() {
             <Text style={styles.adminRole}>Quản trị viên</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace('/login')}>
+        <TouchableOpacity 
+          style={styles.logoutButton} 
+          onPress={async () => {
+            await logout();
+          }}
+        >
           <Ionicons name="log-out-outline" size={20} color="#C45B83" />
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>

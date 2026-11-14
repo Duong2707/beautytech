@@ -10,10 +10,12 @@ import {
   Alert,
   useWindowDimensions,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform, 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-// 🌟 Import api
+import { useAuth } from '../../presentation/contexts/AuthContext'; 
 import api from '../../data/datasources/remote/api';
 
 // Cập nhật Type cho khớp với Database
@@ -37,6 +39,7 @@ const menuItems = [
 
 export default function AdminNotificationsScreen() {
   const router = useRouter();
+  const { logout } = useAuth();
   const { width } = useWindowDimensions();
   const isMobile = width < 760;
 
@@ -163,7 +166,7 @@ export default function AdminNotificationsScreen() {
             <Text style={styles.profileRole}>Quản trị viên</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={() => router.replace('/login')}>
+        <TouchableOpacity style={styles.logoutButton} onPress={async() => await logout()}>
           <Ionicons name="log-out-outline" size={20} color={PINK} />
           <Text style={styles.logoutText}>Đăng xuất</Text>
         </TouchableOpacity>
@@ -256,81 +259,97 @@ export default function AdminNotificationsScreen() {
       </View>
 
       {/* MODAL TẠO MỚI */}
+      {/* MODAL TẠO MỚI */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <View style={styles.modalHeader}>
-                <View style={styles.modalIcon}>
-                  <Ionicons name="notifications-outline" size={23} color={PINK} />
+        
+        {/* 👇 1. Bọc nội dung bằng KeyboardAvoidingView */}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              
+              {/* 2. ScrollView này đã có sẵn keyboardShouldPersistTaps nên rất tốt */}
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 10 }} // Thêm chút khoảng trống dưới cùng
+              >
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalIcon}>
+                    <Ionicons name="notifications-outline" size={23} color={PINK} />
+                  </View>
+                  <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+                    <Ionicons name="close" size={22} color={MUTED} />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
-                  <Ionicons name="close" size={22} color={MUTED} />
-                </TouchableOpacity>
-              </View>
 
-              <Text style={styles.modalTitle}>Tạo thông báo mới</Text>
-              <Text style={styles.modalSubtitle}>Nhập nội dung bạn muốn gửi đến khách hàng.</Text>
+                <Text style={styles.modalTitle}>Tạo thông báo mới</Text>
+                <Text style={styles.modalSubtitle}>Nhập nội dung bạn muốn gửi đến khách hàng.</Text>
 
-              <Text style={styles.inputLabel}>Tiêu đề thông báo</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ví dụ: Ưu đãi đặc biệt hôm nay"
-                value={title}
-                onChangeText={setTitle}
-              />
+                <Text style={styles.inputLabel}>Tiêu đề thông báo</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ví dụ: Ưu đãi đặc biệt hôm nay"
+                  value={title}
+                  onChangeText={setTitle}
+                />
 
-              <Text style={styles.inputLabel}>Nội dung thông báo</Text>
-              <TextInput
-                style={[styles.input, { height: 100, paddingTop: 12 }]}
-                placeholder="Nhập nội dung..."
-                value={content}
-                onChangeText={setContent}
-                multiline
-                textAlignVertical="top"
-              />
+                <Text style={styles.inputLabel}>Nội dung thông báo</Text>
+                <TextInput
+                  style={[styles.input, { height: 100, paddingTop: 12 }]}
+                  placeholder="Nhập nội dung..."
+                  value={content}
+                  onChangeText={setContent}
+                  multiline
+                  textAlignVertical="top"
+                />
 
-              <Text style={styles.inputLabel}>Loại thông báo</Text>
-              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-                <TouchableOpacity 
-                  style={[styles.input, { flex: 1, alignItems: 'center', backgroundColor: type === 'system' ? '#FCEEF2' : '#FFFCFD', borderColor: type === 'system' ? PINK : '#EEE3E8' }]} 
-                  onPress={() => setType('system')}
-                >
-                  <Text style={{ color: type === 'system' ? PINK : DARK, fontWeight: '700' }}>Hệ thống</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.input, { flex: 1, alignItems: 'center', backgroundColor: type === 'promo' ? '#FCEEF2' : '#FFFCFD', borderColor: type === 'promo' ? PINK : '#EEE3E8' }]} 
-                  onPress={() => setType('promo')}
-                >
-                  <Text style={{ color: type === 'promo' ? PINK : DARK, fontWeight: '700' }}>Khuyến mãi</Text>
-                </TouchableOpacity>
-              </View>
+                <Text style={styles.inputLabel}>Loại thông báo</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
+                  <TouchableOpacity 
+                    style={[styles.input, { flex: 1, alignItems: 'center', backgroundColor: type === 'system' ? '#FCEEF2' : '#FFFCFD', borderColor: type === 'system' ? PINK : '#EEE3E8' }]} 
+                    onPress={() => setType('system')}
+                  >
+                    <Text style={{ color: type === 'system' ? PINK : DARK, fontWeight: '700' }}>Hệ thống</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.input, { flex: 1, alignItems: 'center', backgroundColor: type === 'promo' ? '#FCEEF2' : '#FFFCFD', borderColor: type === 'promo' ? PINK : '#EEE3E8' }]} 
+                    onPress={() => setType('promo')}
+                  >
+                    <Text style={{ color: type === 'promo' ? PINK : DARK, fontWeight: '700' }}>Khuyến mãi</Text>
+                  </TouchableOpacity>
+                </View>
 
-              {type === 'promo' && (
-                <>
-                  <Text style={styles.inputLabel}>Mã Voucher (Bắt buộc)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Ví dụ: BEAUTY20"
-                    value={voucherCode}
-                    onChangeText={setVoucherCode}
-                    autoCapitalize="characters"
-                  />
-                </>
-              )}
+                {type === 'promo' && (
+                  <>
+                    <Text style={styles.inputLabel}>Mã Voucher (Bắt buộc)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Ví dụ: BEAUTY20"
+                      value={voucherCode}
+                      onChangeText={setVoucherCode}
+                      autoCapitalize="characters"
+                    />
+                  </>
+                )}
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.cancelText}>Hủy</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveButton} onPress={saveNotification}>
-                  <Ionicons name="checkmark" size={17} color="#FFFFFF" />
-                  <Text style={styles.saveText}>Gửi thông báo</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+                    <Text style={styles.cancelText}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.saveButton} onPress={saveNotification}>
+                    <Ionicons name="checkmark" size={17} color="#FFFFFF" />
+                    <Text style={styles.saveText}>Gửi thông báo</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+              
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
+
       </Modal>
     </View>
   );

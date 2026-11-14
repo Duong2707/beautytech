@@ -35,15 +35,25 @@ export const createOrderApi = async (_token: string, orderData: any) => {
 
 export const fetchOrdersApi = async () => {
   try {
+    // Lưu ý: Nếu Backend của bạn có route riêng cho Admin (ví dụ: /api/orders/admin) thì phải đổi URL ở đây nhé!
     const res = await api.get('/api/orders');
+    
     // Khi có mạng, cập nhật lại Cache
     await AsyncStorage.setItem(CACHE_KEY_ORDERS, JSON.stringify(res.data.data || res.data));
     return res.data;
   } catch (error: any) {
-    // 🌟 Khi mất mạng, đọc từ Cache trả về thay vì văng lỗi
-    console.log('[orderApi] Lỗi mạng, đang dùng cache đơn hàng...');
-    const cached = await AsyncStorage.getItem(CACHE_KEY_ORDERS);
-    return { success: true, data: cached ? JSON.parse(cached) : [] };
+    // 🌟 PHÂN BIỆT LỖI MẠNG VÀ LỖI SERVER
+    if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+      console.log('[orderApi] Mất mạng thực sự, đang dùng cache đơn hàng...');
+      const cached = await AsyncStorage.getItem(CACHE_KEY_ORDERS);
+      return { success: true, data: cached ? JSON.parse(cached) : [] };
+    } else {
+      // 👇 IN RA LỖI THẬT TỪ SERVER (Để biết tại sao không lấy được data)
+      console.error('❌ [orderApi] Lỗi từ Server:', error.response?.status, error.response?.data);
+      
+      // Trả về mảng rỗng nếu lỗi, tránh crash app
+      return { success: false, data: [] }; 
+    }
   }
 };
 

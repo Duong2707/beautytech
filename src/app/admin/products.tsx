@@ -15,8 +15,10 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  KeyboardAvoidingView,
 } from "react-native";
 import api from "../../data/datasources/remote/api"; // Dùng trực tiếp api instance
+import { useAuth } from "../../presentation/contexts/AuthContext"; 
 
 const PINK = "#E88BA8";
 const DARK = "#30242A";
@@ -67,6 +69,7 @@ const formatPrice = (value: number | string) => {
 export default function AdminProducts() {
   const router = useRouter();
   const pathname = usePathname();
+  const { logout } = useAuth(); 
   const { width } = useWindowDimensions();
   const isMobile = width < 760;
 
@@ -132,7 +135,9 @@ export default function AdminProducts() {
   };
 
   const handleLogout = () => {
-    const confirmLogout = () => router.replace("/login" as any);
+    const confirmLogout = async () => {
+      await logout();
+    };
     if (Platform.OS === 'web') {
       if (window.confirm("Bạn có chắc chắn muốn đăng xuất?")) confirmLogout();
     } else {
@@ -441,61 +446,71 @@ export default function AdminProducts() {
 
       {/* MODAL THÊM / SỬA SẢN PHẨM */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeForm}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editingId !== null ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới"}</Text>
-              <Pressable onPress={closeForm}><Ionicons name="close" size={24} color={DARK} /></Pressable>
+        {/* 👇 Bọc nội dung bằng KeyboardAvoidingView */}
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editingId !== null ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới"}</Text>
+                <Pressable onPress={closeForm}><Ionicons name="close" size={24} color={DARK} /></Pressable>
+              </View>
+
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                keyboardShouldPersistTaps="handled" // Đã có sẵn, rất tốt
+                contentContainerStyle={{ paddingBottom: 20 }}
+              >
+                <Pressable style={styles.imagePicker} onPress={pickImage}>
+                  {imageUri ? (
+                    <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="cover" />
+                  ) : (
+                    <>
+                      <Ionicons name="camera-outline" size={32} color={PINK} />
+                      <Text style={styles.imagePickerText}>Chọn hình ảnh sản phẩm</Text>
+                    </>
+                  )}
+                </Pressable>
+
+                <Text style={styles.inputLabel}>Tên sản phẩm *</Text>
+                <TextInput value={name} onChangeText={setName} placeholder="Nhập tên sản phẩm" placeholderTextColor="#B6A9AE" style={styles.input} />
+
+                <Text style={styles.inputLabel}>Thương hiệu</Text>
+                <TextInput value={brand} onChangeText={setBrand} placeholder="Ví dụ: Cerave, BeautyTech..." placeholderTextColor="#B6A9AE" style={styles.input} />
+
+                <Text style={styles.inputLabel}>Danh mục *</Text>
+                <View style={styles.formCategoryWrap}>
+                  {Object.keys(CATEGORIES_MAP).map((item) => (
+                    <Pressable key={item} onPress={() => setFormCategory(item)} style={[styles.formCategoryChip, formCategory === item && styles.formCategoryActive]}>
+                      <Text style={[styles.formCategoryText, formCategory === item && styles.formCategoryTextActive]}>{item}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <Text style={styles.inputLabel}>Giá bán (VNĐ) *</Text>
+                <TextInput value={price} onChangeText={setPrice} placeholder="Ví dụ: 259000" placeholderTextColor="#B6A9AE" keyboardType="numeric" style={styles.input} />
+
+                <Text style={styles.inputLabel}>Số lượng tồn kho *</Text>
+                <TextInput value={stock} onChangeText={setStock} placeholder="Nhập số lượng" placeholderTextColor="#B6A9AE" keyboardType="numeric" style={styles.input} />
+
+                <Text style={styles.inputLabel}>Dung tích (Cách nhau bởi dấu phẩy)</Text>
+                <TextInput value={sizes} onChangeText={setSizes} placeholder="Ví dụ: 30ml, 50ml" placeholderTextColor="#B6A9AE" style={styles.input} />
+
+                <Text style={styles.inputLabel}>Mô tả</Text>
+                <TextInput value={description} onChangeText={setDescription} placeholder="Mô tả sản phẩm..." placeholderTextColor="#B6A9AE" multiline style={[styles.input, styles.descriptionInput]} />
+
+                {!!error && <Text style={styles.errorText}>{error}</Text>}
+
+                <View style={styles.modalActions}>
+                  <Pressable style={styles.cancelButton} onPress={closeForm}><Text style={styles.cancelText}>Hủy</Text></Pressable>
+                  <Pressable style={styles.saveButton} onPress={saveProduct}><Text style={styles.saveText}>Lưu sản phẩm</Text></Pressable>
+                </View>
+              </ScrollView>
             </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Pressable style={styles.imagePicker} onPress={pickImage}>
-                {imageUri ? (
-                  <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="cover" />
-                ) : (
-                  <>
-                    <Ionicons name="camera-outline" size={32} color={PINK} />
-                    <Text style={styles.imagePickerText}>Chọn hình ảnh sản phẩm</Text>
-                  </>
-                )}
-              </Pressable>
-
-              <Text style={styles.inputLabel}>Tên sản phẩm *</Text>
-              <TextInput value={name} onChangeText={setName} placeholder="Nhập tên sản phẩm" placeholderTextColor="#B6A9AE" style={styles.input} />
-
-              <Text style={styles.inputLabel}>Thương hiệu</Text>
-              <TextInput value={brand} onChangeText={setBrand} placeholder="Ví dụ: Cerave, BeautyTech..." placeholderTextColor="#B6A9AE" style={styles.input} />
-
-              <Text style={styles.inputLabel}>Danh mục *</Text>
-              <View style={styles.formCategoryWrap}>
-                {Object.keys(CATEGORIES_MAP).map((item) => (
-                  <Pressable key={item} onPress={() => setFormCategory(item)} style={[styles.formCategoryChip, formCategory === item && styles.formCategoryActive]}>
-                    <Text style={[styles.formCategoryText, formCategory === item && styles.formCategoryTextActive]}>{item}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Giá bán (VNĐ) *</Text>
-              <TextInput value={price} onChangeText={setPrice} placeholder="Ví dụ: 259000" placeholderTextColor="#B6A9AE" keyboardType="numeric" style={styles.input} />
-
-              <Text style={styles.inputLabel}>Số lượng tồn kho *</Text>
-              <TextInput value={stock} onChangeText={setStock} placeholder="Nhập số lượng" placeholderTextColor="#B6A9AE" keyboardType="numeric" style={styles.input} />
-
-              <Text style={styles.inputLabel}>Dung tích (Cách nhau bởi dấu phẩy)</Text>
-              <TextInput value={sizes} onChangeText={setSizes} placeholder="Ví dụ: 30ml, 50ml" placeholderTextColor="#B6A9AE" style={styles.input} />
-
-              <Text style={styles.inputLabel}>Mô tả</Text>
-              <TextInput value={description} onChangeText={setDescription} placeholder="Mô tả sản phẩm..." placeholderTextColor="#B6A9AE" multiline style={[styles.input, styles.descriptionInput]} />
-
-              {!!error && <Text style={styles.errorText}>{error}</Text>}
-
-              <View style={styles.modalActions}>
-                <Pressable style={styles.cancelButton} onPress={closeForm}><Text style={styles.cancelText}>Hủy</Text></Pressable>
-                <Pressable style={styles.saveButton} onPress={saveProduct}><Text style={styles.saveText}>Lưu sản phẩm</Text></Pressable>
-              </View>
-            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* MODAL XÁC NHẬN XÓA */}
