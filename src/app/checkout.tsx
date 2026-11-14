@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, Image, Ale
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { sqliteStorage as AsyncStorage } from '../data/datasources/local/sqliteStorage'; 
-import NetInfo from '@react-native-community/netinfo'; // 🌟 Thêm import NetInfo để check mạng cho QR
+import NetInfo from '@react-native-community/netinfo';
 import { useCart } from '../presentation/contexts/CartContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
 import { useAuth } from '../presentation/contexts/AuthContext';
@@ -39,6 +39,7 @@ export default function CheckoutScreen() {
   const [isOrderPlaced, setIsOrderPlaced] = useState(false);
 
   useEffect(() => {
+    // Tạo mã đơn hàng ngẫu nhiên khi vào màn hình
     setCurrentOrderId('ORD' + Math.floor(Math.random() * 1000000));
     loadVouchers();
   }, []);
@@ -98,18 +99,23 @@ export default function CheckoutScreen() {
     checkAndApplyVoucher();
   }, [params.voucherCode, subTotal, vouchers]);
 
-  // 🌟 3. POLLING KIỂM TRA THANH TOÁN (Có kiểm tra mạng để không bị spam lỗi)
+  // 🌟 VÒNG LẶP KIỂM TRA TRẠNG THÁI THANH TOÁN
   useEffect(() => {
     let interval: any;
-    if (payment === 'qr' && !isPaid && currentOrderId) {
+    // Chỉ chạy khi đã tạo đơn hàng QR và chưa thanh toán
+    if (payment === 'qr' && isOrderPlaced && !isPaid && currentOrderId) {
       interval = setInterval(async () => {
         try {
-          // Kiểm tra mạng trước khi gọi API
           const netState = await NetInfo.fetch();
-          if (!netState.isConnected) return; // Nếu mất mạng thì bỏ qua, không gọi API
+          if (!netState.isConnected) return;
 
           const res = await api.get(`/api/payment/check-status/${currentOrderId}`);
-          if (res.data?.status === 'paid') {
+          console.log("Check thanh toán trả về:", res.data); // Debug dữ liệu trả về
+
+          // Kiểm tra cấu trúc dữ liệu trả về (đề phòng Backend bọc trong .data)
+          const status = res.data?.status || res.data?.data?.status;
+          
+          if (status === 'paid') {
             setIsPaid(true); 
             clearInterval(interval); 
           }
@@ -117,17 +123,30 @@ export default function CheckoutScreen() {
       }, 3000); 
     }
     return () => clearInterval(interval);
-  }, [payment, isPaid, currentOrderId]);
+  }, [payment, isOrderPlaced, isPaid, currentOrderId]);
 
+  // 🌟 TỰ ĐỘNG XỬ LÝ KHI THANH TOÁN THÀNH CÔNG
   useEffect(() => {
-    if (isPaid && payment === 'qr' && !isOrderPlaced) {
+    if (isPaid && payment === 'qr') {
+      const handleSuccess = async () => {
+        await removeSelectedFromCart(); // Xóa giỏ hàng
+        if (Platform.OS === 'web') {
+          window.alert('Thanh toán thành công! Đơn hàng đang được xử lý.');
+          router.replace('/home');
+        } else {
+          Alert.alert('Thành công', 'Thanh toán thành công! Đơn hàng đang được xử lý.', [
+            { text: 'Về trang chủ', onPress: () => router.replace('/home') }
+          ]);
+        }
+      };
+      
+      // Đợi 1.5s cho người dùng thấy dấu tích xanh rồi mới chuyển trang
       const timer = setTimeout(() => {
-        setIsOrderPlaced(true); 
-        handlePlaceOrder(true); 
-      }, 1500); 
+        handleSuccess();
+      }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [isPaid, payment, isOrderPlaced]);
+  }, [isPaid, payment]);
 
   const availableVouchers = useMemo(() => vouchers.filter(v => subTotal >= v.minOrder), [vouchers, subTotal]);
   
@@ -157,6 +176,7 @@ export default function CheckoutScreen() {
     return `https://img.vietqr.io/image/${bankId}-${accountNo}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
   };
 
+  // 🌟 HÀM XỬ LÝ ĐẶT HÀNG ĐÃ ĐƯỢC CẤU TRÚC LẠI
   const handlePlaceOrder = async (isAuto = false) => {
     if (selectedItems.length === 0) { 
       if (!isAuto) Alert.alert('Lỗi', 'Không có sản phẩm nào để thanh toán!'); 
@@ -193,40 +213,45 @@ export default function CheckoutScreen() {
         total: totalPrice,
         address: currentAddress.address,
         paymentMethod: payment,
-        paymentStatus: payment === 'qr' ? (isPaid ? 'paid' : 'pending') : 'unpaid',
+        paymentStatus: payment === 'qr' ? 'pending' : 'unpaid', // QR ban đầu luôn pending
         orderStatus: 'pending',
       };
 
-      // 🌟 BẮT KẾT QUẢ TRẢ VỀ TỪ API
+      // 1. Gọi API lưu đơn hàng vào Database
+      console.log("👉 Dữ liệu đơn hàng chuẩn bị gửi lên:", newOrder); // Xem dữ liệu gửi đi
+      
       const res = await createOrderApi(user?.token || 'fake_token', newOrder);
-      await removeSelectedFromCart(); 
       
-      // 🌟 XỬ LÝ THÔNG BÁO OFFLINE
+      console.log("👉 Kết quả API tạo đơn trả về:", res); // Xem API trả về cái gì
+      
       const isOfflineOrder = res && res.isOffline;
-      
-      if (Platform.OS === 'web') {
-        if (!isAuto) {
-          window.alert(isOfflineOrder 
-            ? 'Đơn hàng đã được lưu ngoại tuyến! Sẽ đồng bộ khi có mạng.' 
-            : 'Đặt hàng thành công!');
-        }
-        router.replace('/home'); 
+
+      // 2. PHÂN NHÁNH XỬ LÝ
+      if (payment === 'qr') {
+        // Nếu là QR: Bật cờ isOrderPlaced để hiện mã QR, KHÔNG chuyển trang, KHÔNG xóa giỏ hàng
+        setIsOrderPlaced(true);
       } else {
-        if (!isAuto) {
-          Alert.alert(
-            isOfflineOrder ? 'Lưu ngoại tuyến' : 'Đặt hàng thành công', 
-            isOfflineOrder ? 'Đơn hàng đã được lưu trên máy. Sẽ tự động đồng bộ khi có mạng!' : 'Cảm ơn bạn đã mua sắm!', 
-            [{ text: 'Về trang chủ', onPress: () => router.replace('/home') }]
-          );
+        // Nếu là COD: Xóa giỏ hàng và chuyển về Home luôn
+        await removeSelectedFromCart(); 
+        if (Platform.OS === 'web') {
+          if (!isAuto) window.alert(isOfflineOrder ? 'Đơn hàng đã được lưu ngoại tuyến!' : 'Đặt hàng thành công!');
+          router.replace('/home'); 
         } else {
-          router.replace('/home');
+          if (!isAuto) {
+            Alert.alert(
+              isOfflineOrder ? 'Lưu ngoại tuyến' : 'Đặt hàng thành công', 
+              isOfflineOrder ? 'Đơn hàng đã được lưu trên máy. Sẽ tự động đồng bộ khi có mạng!' : 'Cảm ơn bạn đã mua sắm!', 
+              [{ text: 'Về trang chủ', onPress: () => router.replace('/home') }]
+            );
+          } else {
+            router.replace('/home');
+          }
         }
       }
     } catch (error) {
       console.error("Lỗi đặt hàng:", error);
       if (Platform.OS === 'web') window.alert('Có lỗi xảy ra khi lưu đơn hàng, vui lòng kiểm tra Console (F12)!');
       else Alert.alert('Lỗi', 'Không thể tạo đơn hàng.');
-      setIsOrderPlaced(false); 
     }
   };
 
@@ -326,13 +351,19 @@ export default function CheckoutScreen() {
           <Pressable style={dynamicStyles.optionRow} onPress={() => setPayment('qr')}>
             <View style={dynamicStyles.radioRow}><Ionicons name={payment === 'qr' ? "radio-button-on" : "radio-button-off"} size={22} color={theme.primary} /><Text style={dynamicStyles.optionTitle}>Chuyển khoản QR Code</Text></View>
           </Pressable>
+          
+          {/* 🌟 KHU VỰC HIỂN THỊ QR CODE */}
           {payment === 'qr' && (
             <View style={dynamicStyles.qrContainer}>
-              {isPaid ? (
+              {!isOrderPlaced ? (
+                <Text style={{ color: theme.primary, fontStyle: 'italic', textAlign: 'center' }}>
+                  Vui lòng bấm "Tạo đơn & Lấy mã QR" ở dưới cùng để tiến hành thanh toán.
+                </Text>
+              ) : isPaid ? (
                 <View style={dynamicStyles.paidBox}>
                   <Ionicons name="checkmark-circle" size={50} color="#4CAF50" />
-                  <Text style={dynamicStyles.paidText}>Đã xác nhận chuyển khoản</Text>
-                  <Text style={{color: theme.primary, marginTop: 5, fontSize: 13}}>Đang tự động đặt hàng...</Text>
+                  <Text style={dynamicStyles.paidText}>Thanh toán thành công!</Text>
+                  <Text style={{color: theme.textMuted, marginTop: 5, fontSize: 13}}>Đang tự động chuyển trang...</Text>
                 </View>
               ) : (
                 <>
@@ -375,11 +406,16 @@ export default function CheckoutScreen() {
       <View style={dynamicStyles.bottomBar}>
         <View style={dynamicStyles.bottomPrice}><Text style={dynamicStyles.bottomPriceLabel}>Tổng cộng:</Text><Text style={dynamicStyles.bottomPriceValue}>{formatPrice(totalPrice)}</Text></View>
         <Pressable 
-          style={[dynamicStyles.placeOrderBtn, (selectedItems.length === 0 || isOrderPlaced) && { opacity: 0.5 }]} 
-          disabled={selectedItems.length === 0 || isOrderPlaced} 
+          style={[dynamicStyles.placeOrderBtn, ((selectedItems.length === 0) || (payment === 'qr' && isOrderPlaced)) && { opacity: 0.5 }]} 
+          disabled={(selectedItems.length === 0) || (payment === 'qr' && isOrderPlaced)} 
           onPress={() => handlePlaceOrder(false)}
         >
-          <Text style={dynamicStyles.placeOrderText}>{isOrderPlaced ? 'Đang xử lý...' : 'Đặt hàng'}</Text>
+          <Text style={dynamicStyles.placeOrderText}>
+            {payment === 'qr' 
+              ? (isOrderPlaced ? 'Đang chờ chuyển khoản...' : 'Tạo đơn & Lấy mã QR')
+              : 'Đặt hàng'
+            }
+          </Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -411,7 +447,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   optionSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   optionPrice: { fontSize: 14, fontWeight: '700', color: theme.primary },
   divider: { height: 1, backgroundColor: theme.border, marginVertical: 10 },
-  qrContainer: { alignItems: 'center', marginTop: 15, padding: 15, backgroundColor: theme.background, borderRadius: 10 },
+  qrContainer: { alignItems: 'center', marginTop: 15, padding: 15, backgroundColor: theme.background, borderRadius: 10, minHeight: 100, justifyContent: 'center' },
   qrImage: { width: 180, height: 180 },
   qrText: { marginTop: 10, color: theme.textMuted, fontSize: 13, marginBottom: 15, textAlign: 'center' },
   confirmPaidBtn: { backgroundColor: theme.isDark ? '#1E3320' : '#E8F5E9', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#4CAF50' },

@@ -46,19 +46,39 @@ export default function LoginScreen() {
     }
   };
 
+  // ==========================================
+  // 1. XỬ LÝ TOKEN CỦA GOOGLE
+  // ==========================================
   const handleFirebaseToken = async (idToken: string) => {
     try {
       const response = await api.post('/api/auth/firebase-login', { idToken });
       const { token, ...userData } = response.data.data;
       await setAuthData(userData, token);
     } catch (error: any) {
-      let message = error?.response?.data?.message || 'Đăng nhập thất bại';
-      
-      // 🌟 Bắt lỗi mạng
+      let message = error?.response?.data?.message || 'Đăng nhập Google thất bại';
       if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
         message = 'Không có kết nối Internet. Vui lòng kiểm tra Wifi/4G và thử lại!';
       }
-      
+      showAlert('Lỗi', message);
+    } finally {
+      setSocialLoading(false);
+    }
+  };
+
+  // ==========================================
+  // 2. XỬ LÝ TOKEN CỦA FACEBOOK (MỚI)
+  // ==========================================
+  const handleFacebookToken = async (accessToken: string) => {
+    try {
+      // Gọi đúng route facebook-login của Backend
+      const response = await api.post('/api/auth/facebook-login', { accessToken });
+      const { token, ...userData } = response.data.data;
+      await setAuthData(userData, token);
+    } catch (error: any) {
+      let message = error?.response?.data?.message || 'Đăng nhập Facebook thất bại';
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        message = 'Không có kết nối Internet. Vui lòng kiểm tra Wifi/4G và thử lại!';
+      }
       showAlert('Lỗi', message);
     } finally {
       setSocialLoading(false);
@@ -74,27 +94,25 @@ export default function LoginScreen() {
     try {
       await login(email, password, isAdminMode);
     } catch (error: any) {
-      // Lấy câu thông báo lỗi từ Backend trả về (VD: "Email hoặc password không đúng")
       let message = error?.response?.data?.message || 'Đăng nhập thất bại';
-      
-      // 🌟 Bắt lỗi mạng
       if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
         message = 'Không có kết nối Internet. Vui lòng kiểm tra Wifi/4G và thử lại!';
       }
-      
       showAlert('Lỗi', message);
     } finally {
       setLoading(false);
     }
   };
 
+  // ==========================================
+  // 3. ĐĂNG NHẬP GOOGLE
+  // ==========================================
   const handleGoogleLogin = async () => {
     if (isAdminMode) {
       showAlert('Thông báo', 'Quản trị viên vui lòng đăng nhập bằng Email/Mật khẩu!');
       return;
     }
 
-    // Xử lý cho Web (giữ nguyên)
     if (Platform.OS === 'web') {
       setSocialLoading(true);
       try {
@@ -112,9 +130,8 @@ export default function LoginScreen() {
       return;
     }
 
-    // Xử lý cho Mobile (Android/iOS)
     setSocialLoading(true);
-    const redirectUrl = Linking.createURL('callback'); // Sẽ ra beautytech://callback
+    const redirectUrl = Linking.createURL('callback');
     const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
     
     try {
@@ -124,7 +141,6 @@ export default function LoginScreen() {
         const { url } = result;
         console.log("👉 Link trả về từ Google:", url);
         
-        // 👇 GIỮ LẠI ĐOẠN NÀY (Dùng Linking.parse)
         const parsedUrl = Linking.parse(url);
         const idToken = parsedUrl.queryParams?.idToken as string; 
         
@@ -132,26 +148,28 @@ export default function LoginScreen() {
           await handleFirebaseToken(idToken); 
         } else {
           showAlert('Lỗi', 'Không lấy được idToken từ Google!');
+          setSocialLoading(false);
         }
-
       } else {
-        console.log('Người dùng đã hủy đăng nhập');
+        console.log('Người dùng đã hủy đăng nhập Google');
+        setSocialLoading(false);
       }
     } catch (error) {
       console.error(error);
       showAlert('Lỗi', 'Không mở được trình duyệt');
-    } finally {
-      setSocialLoading(false); 
+      setSocialLoading(false);
     }
   };
 
+  // ==========================================
+  // 4. ĐĂNG NHẬP FACEBOOK (ĐÃ SỬA)
+  // ==========================================
   const handleFacebookLogin = async () => {
     if (isAdminMode) {
       showAlert('Thông báo', 'Quản trị viên vui lòng đăng nhập bằng Email/Mật khẩu!');
       return;
     }
 
-    // Xử lý cho Web
     if (Platform.OS === 'web') {
       setSocialLoading(true);
       const redirectUrl = `${window.location.origin}/callback`;
@@ -160,37 +178,36 @@ export default function LoginScreen() {
       return;
     }
 
-    // Xử lý cho Mobile (Android/iOS)
     setSocialLoading(true);
     const redirectUrl = Linking.createURL('callback');
     const authUrl = `${WEB_LOGIN_URL}?redirect=${encodeURIComponent(redirectUrl)}`;
     
     try {
-      // 👇 Đổi openBrowserAsync thành openAuthSessionAsync để đợi người dùng tương tác
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
       
-      if (result.type === 'success') {
+if (result.type === 'success') {
         const { url } = result;
         console.log("👉 Link trả về từ Facebook:", url);
         
-        // Xử lý token tương tự bên Google (Tùy thuộc Netlify của bạn trả về idToken hay accessToken)
-        const parsedUrl = Linking.parse(url);
-        const idToken = parsedUrl.queryParams?.idToken as string; 
+        // 👇 DÙNG REGEX ĐỂ BẮT TOKEN (Chuẩn nhất, không sợ lỗi exp://)
+        const tokenMatch = url.match(/accessToken=([^&]+)/) || url.match(/access_token=([^&]+)/);
+        const accessToken = tokenMatch ? tokenMatch[1] : null;
         
-        if (idToken) {
-          await handleFirebaseToken(idToken);
+        if (accessToken) {
+          console.log("✅ Đã bắt được Access Token thành công!");
+          await handleFacebookToken(accessToken);
         } else {
-          showAlert('Lỗi', 'Không lấy được token từ Facebook!');
+          showAlert('Lỗi', 'Không lấy được accessToken từ Facebook!');
+          setSocialLoading(false);
         }
       } else {
         console.log('Người dùng đã hủy đăng nhập Facebook');
+        setSocialLoading(false);
       }
     } catch (error) {
       console.error(error);
       showAlert('Lỗi', 'Không mở được trình duyệt');
-    } finally {
-      // 👇 CỰC KỲ QUAN TRỌNG: Dù thành công, thất bại hay HỦY NGANG, cũng phải tắt Loading!
-      setSocialLoading(false); 
+      setSocialLoading(false);
     }
   };
 
@@ -201,7 +218,6 @@ export default function LoginScreen() {
           <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
           <Text style={styles.title}>Beauty Tech</Text>
 
-          {/* TOGGLE CHỌN CHẾ ĐỘ ĐĂNG NHẬP */}
           <View style={styles.toggleContainer}>
             <Pressable
               style={[styles.toggleBtn, !isAdminMode && styles.toggleBtnActive]}
