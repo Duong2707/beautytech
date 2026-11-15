@@ -41,11 +41,11 @@ npm test
 **🔑 Tài khoản Test (Dành cho Giảng viên/Hội đồng)**
 - **Tài khoản Admin:*
 - Email: admin
-- Mật khẩu: 123456
+- Mật khẩu: admin
 
 - **Tài khoản Khách hàng:*
-- Email: test@gmail.com
-- Mật khẩu: 123456
+- Email: dothaoduong2005@gmail.com
+- Mật khẩu: 123123
 
 **📁 Cấu trúc thư mục**
 - src/app/: Chứa các màn hình (Screens) của ứng dụng (Expo Router).
