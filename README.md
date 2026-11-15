@@ -39,20 +39,20 @@ npx expo start -c
 npm test
 ```
 **🔑 Tài khoản Test (Dành cho Giảng viên/Hội đồng)**
-**Tài khoản Admin:*
-Email: admin
-Mật khẩu: 123456
+- **Tài khoản Admin:*
+- Email: admin
+- Mật khẩu: 123456
 
-**Tài khoản Khách hàng:*
-Email: test@gmail.com
-Mật khẩu: 123456
+- **Tài khoản Khách hàng:*
+- Email: test@gmail.com
+- Mật khẩu: 123456
 
 **📁 Cấu trúc thư mục**
-src/app/: Chứa các màn hình (Screens) của ứng dụng (Expo Router).
-src/presentation/: Chứa Contexts, Components, Hooks.
-src/services/: Chứa logic gọi API, AI, Offline Sync.
-src/data/: Chứa cấu hình Axios, SQLite.
-src/__tests__/: Chứa 60 kịch bản kiểm thử tự động.
+- src/app/: Chứa các màn hình (Screens) của ứng dụng (Expo Router).
+- src/presentation/: Chứa Contexts, Components, Hooks.
+- src/services/: Chứa logic gọi API, AI, Offline Sync.
+- src/data/: Chứa cấu hình Axios, SQLite.
+- src/__tests__/: Chứa 60 kịch bản kiểm thử tự động.
 
 **Phát triển bởi:**
 - Đỗ Thảo Dương - 23IT.B034
