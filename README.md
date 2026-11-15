@@ -21,22 +21,23 @@
 
 1. **Cài đặt các gói phụ thuộc:**
 ```bash
-npm install
-1. **Cấu hình biến môi trường:**
+   npm install
+```
+2. **Cấu hình biến môi trường:**
 - Tạo file .env ở thư mục gốc và thêm API Key (nếu có):
-``` env:
+```env
 EXPO_PUBLIC_GROQ_API_KEY=your_groq_api_key_here
-
+```
 3. **Khởi động ứng dụng:**
-``` bash
+```bash
 npx expo start -c
-
+```
 - Quét mã QR bằng ứng dụng Expo Go (trên Android/iOS) hoặc chạy trên máy ảo.
 
 4. **Chạy kiểm thử tự động (60 Test Cases):**
-``` bash
+```bash
 npm test
-
+```
 **🔑 Tài khoản Test (Dành cho Giảng viên/Hội đồng)**
 **Tài khoản Admin:*
 Email: admin
