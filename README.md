@@ -1,56 +1,58 @@
-# Welcome to your Expo app 👋
+# BeautyTech - Ứng dụng Thương mại điện tử Mỹ phẩm tích hợp AI
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+**BeautyTech** là một ứng dụng đa nền tảng (Cross-platform Mobile App) phục vụ mua sắm mỹ phẩm và chăm sóc da, được tích hợp Trí tuệ Nhân tạo (AI) và Kiến trúc Offline-First. Đây là Đồ án Tốt nghiệp (Capstone Project).
 
-## Get started
+## 🌟 Điểm nhấn kỹ thuật nổi bật
+- **AI On-device (TensorFlow Lite):** Phân tích tình trạng da (Mụn/Da thường) trực tiếp trên thiết bị thông qua camera. Độ trễ cực thấp (~85ms), bảo mật tuyệt đối dữ liệu khuôn mặt (không gửi lên server).
+- **Kiến trúc Offline-First (SQLite):** Cho phép người dùng thao tác thêm giỏ hàng, đặt hàng, xem sản phẩm ngay cả khi mất mạng. Tự động đồng bộ (Sync Queue) và xử lý xung đột dữ liệu (Conflict Resolution) khi có mạng trở lại.
+- **Thanh toán tự động:** Tích hợp cổng thanh toán chuyển khoản VietQR và tự động xác nhận qua Webhook SePay.
+- **Chatbot AI:** Tư vấn da liễu thông qua Groq API (Llama 3).
+- **Kiểm thử tự động (Automated Testing):** 60/60 Test Cases (Jest) pass 100% các luồng nghiệp vụ từ cơ bản đến nâng cao.
 
-1. Install dependencies
+## 🚀 Công nghệ sử dụng
+- **Ngôn ngữ:** TypeScript
+- **Framework:** React Native (Expo Router)
+- **Local Storage:** SQLite (Offline-First)
+- **AI/ML:** TensorFlow Lite, Google ML Kit
+- **Testing:** Jest
+- **Authentication:** Firebase Auth (Google), JWT (Facebook/Email)
 
-   ```bash
-   npm install
-   ```
+## ⚙️ Hướng dẫn cài đặt và chạy Frontend
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+1. **Cài đặt các gói phụ thuộc:**
 ```bash
-npm run reset-project
-```
+npm install
+1. **Cấu hình biến môi trường:**
+- Tạo file .env ở thư mục gốc và thêm API Key (nếu có):
+``` env:
+EXPO_PUBLIC_GROQ_API_KEY=your_groq_api_key_here
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+3. **Khởi động ứng dụng:**
+``` bash
+npx expo start -c
 
-### Other setup steps
+- Quét mã QR bằng ứng dụng Expo Go (trên Android/iOS) hoặc chạy trên máy ảo.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+4. **Chạy kiểm thử tự động (60 Test Cases):**
+``` bash
+npm test
 
-## Learn more
+**🔑 Tài khoản Test (Dành cho Giảng viên/Hội đồng)**
+**Tài khoản Admin:*
+Email: admin
+Mật khẩu: 123456
 
-To learn more about developing your project with Expo, look at the following resources:
+**Tài khoản Khách hàng:*
+Email: test@gmail.com
+Mật khẩu: 123456
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+**📁 Cấu trúc thư mục**
+src/app/: Chứa các màn hình (Screens) của ứng dụng (Expo Router).
+src/presentation/: Chứa Contexts, Components, Hooks.
+src/services/: Chứa logic gọi API, AI, Offline Sync.
+src/data/: Chứa cấu hình Axios, SQLite.
+src/__tests__/: Chứa 60 kịch bản kiểm thử tự động.
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+**Phát triển bởi:**
+- Đỗ Thảo Dương - 23IT.B034
+- Ngô Võ Phương Hiền - 23IT.B052
