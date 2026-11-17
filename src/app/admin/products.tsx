@@ -17,7 +17,7 @@ import {
   View,
   KeyboardAvoidingView,
 } from "react-native";
-import api from "../../data/datasources/remote/api"; // Dùng trực tiếp api instance
+import api from "../../data/datasources/remote/api";
 import { useAuth } from "../../presentation/contexts/AuthContext"; 
 
 const PINK = "#E88BA8";
@@ -25,22 +25,21 @@ const DARK = "#30242A";
 const MUTED = "#8E858A";
 const BG = "#FFF8FA";
 
-// 🌟 CẬP NHẬT TYPE CHO KHỚP VỚI DATABASE CỦA KHÁCH HÀNG
+// 🌟 CẬP NHẬT TYPE: sizes giờ là mảng object chứa size và price
 type Product = {
   _id: string;
   name: string;
   brand: string;
-  category: string; // "cleanser" | "serum" | "moisturizer" | "sunscreen" ...
-  price: number;
+  category: string; 
+  price: number; // Giá mặc định (giá nhỏ nhất)
   stock: number;
   description: string;
   image: string;
-  sizes: string[]; // Mảng dung tích
+  sizes: { size: string; price: number }[]; 
   rating?: number;
   sold?: number;
 };
 
-// 🌟 MAP DANH MỤC: Hiển thị tiếng Việt nhưng lưu giá trị tiếng Anh vào DB
 const CATEGORIES_MAP: Record<string, string> = {
   "Làm sạch": "cleanser",
   "Serum": "serum",
@@ -56,7 +55,6 @@ const adminMenu = [
   { label: "Tổng quan", icon: "grid-outline" as const, route: "/admin" },
   { label: "Sản phẩm", icon: "cube-outline" as const, route: "/admin/products" },
   { label: "Đơn hàng", icon: "receipt-outline" as const, route: "/admin/orders" },
-//  { label: "Shipper", icon: "bicycle-outline" as const, route: "/admin/shippers" },
   { label: "Voucher", icon: "ticket-outline" as const, route: "/admin/vouchers" },
   { label: "Thông báo", icon: "notifications-outline" as const, route: "/admin/notifications" },
 ];
@@ -64,6 +62,13 @@ const adminMenu = [
 const formatPrice = (value: number | string) => {
   const number = Number(value);
   return Number.isFinite(number) ? `${number.toLocaleString("vi-VN")}đ` : value;
+};
+
+// Hàm format tiền tệ khi nhập
+const formatCurrency = (text: string) => {
+  const number = text.replace(/\D/g, '');
+  if (!number) return '';
+  return Number(number).toLocaleString('vi-VN');
 };
 
 export default function AdminProducts() {
@@ -88,14 +93,14 @@ export default function AdminProducts() {
   const [name, setName] = useState("");
   const [brand, setBrand] = useState("");
   const [formCategory, setFormCategory] = useState("Serum");
-  const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
-  const [sizes, setSizes] = useState(""); // Lưu dạng chuỗi "30ml, 50ml"
+  // State cho mảng phân loại
+  const [variants, setVariants] = useState<{ size: string; price: string }[]>([{ size: '', price: '' }]);
+  
   const [description, setDescription] = useState("");
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  // 🌟 GỌI API LẤY DANH SÁCH
   useEffect(() => {
     loadProducts();
   }, []);
@@ -117,11 +122,8 @@ export default function AdminProducts() {
     const keyword = search.trim().toLowerCase();
     return products.filter((product) => {
       const matchName = product.name.toLowerCase().includes(keyword) || (product.brand && product.brand.toLowerCase().includes(keyword));
-      
-      // So sánh category từ DB (tiếng Anh) với category đang chọn (tiếng Việt)
       const dbCategoryValue = CATEGORIES_MAP[category];
       const matchCategory = category === "Tất cả" || product.category === dbCategoryValue;
-
       return matchName && matchCategory;
     });
   }, [products, search, category]);
@@ -171,8 +173,15 @@ export default function AdminProducts() {
   };
 
   const resetForm = () => {
-    setName(""); setBrand(""); setFormCategory("Serum"); setPrice(""); setStock(""); 
-    setSizes(""); setDescription(""); setImageUri(null); setError(""); setEditingId(null);
+    setName(""); 
+    setBrand(""); 
+    setFormCategory("Serum"); 
+    setStock(""); 
+    setVariants([{ size: '', price: '' }]); 
+    setDescription(""); 
+    setImageUri(null); 
+    setError(""); 
+    setEditingId(null);
   };
 
   const closeForm = () => {
@@ -190,13 +199,22 @@ export default function AdminProducts() {
     setName(product.name);
     setBrand(product.brand || "");
     
-    // Tìm key tiếng Việt từ value tiếng Anh trong DB
     const vnCategory = Object.keys(CATEGORIES_MAP).find(key => CATEGORIES_MAP[key] === product.category);
     setFormCategory(vnCategory || "Serum");
 
-    setPrice(String(product.price));
     setStock(String(product.stock || 0));
-    setSizes(product.sizes ? product.sizes.join(", ") : "");
+    
+    // Load danh sách phân loại vào form
+    if (product.sizes && product.sizes.length > 0 && typeof product.sizes[0] === 'object') {
+      setVariants(product.sizes.map((s: any) => ({ 
+        size: s.size, 
+        price: s.price.toLocaleString('vi-VN') 
+      })));
+    } else {
+      // Hỗ trợ data cũ (nếu có)
+      setVariants([{ size: 'Mặc định', price: String(product.price) }]);
+    }
+
     setDescription(product.description || "");
     setImageUri(product.image || null);
     setError("");
@@ -205,32 +223,42 @@ export default function AdminProducts() {
 
   // 🌟 LƯU VÀO DATABASE
   const saveProduct = async () => {
-    if (!name.trim() || !price.trim() || !stock.trim()) {
-      setError("Vui lòng nhập đầy đủ tên, giá và số lượng.");
+    if (!name.trim() || !stock.trim()) {
+      setError("Vui lòng nhập tên và số lượng tồn kho.");
       return;
     }
 
-    const parsedPrice = Number(price.replace(/[.,\s]/g, ""));
     const parsedStock = Number(stock);
-
-    if (isNaN(parsedPrice) || isNaN(parsedStock)) {
-      setError("Giá và số lượng phải là số.");
+    if (isNaN(parsedStock)) {
+      setError("Số lượng phải là số.");
       return;
     }
 
-    // Xử lý mảng sizes: "30ml, 50ml" -> ["30ml", "50ml"]
-    const parsedSizes = sizes.split(",").map(s => s.trim()).filter(Boolean);
-    if (parsedSizes.length === 0) parsedSizes.push("Mặc định");
+    // Lọc và format lại mảng variants
+    const parsedVariants = variants
+      .filter(v => v.size.trim() !== '' && v.price.trim() !== '')
+      .map(v => ({
+        size: v.size.trim(),
+        price: Number(v.price.replace(/[.,\s]/g, ''))
+      }));
+
+    if (parsedVariants.length === 0) {
+      setError("Vui lòng nhập ít nhất 1 phân loại (dung tích và giá).");
+      return;
+    }
+
+    // Lấy giá nhỏ nhất làm giá hiển thị mặc định ngoài danh sách
+    const defaultPrice = Math.min(...parsedVariants.map(v => v.price));
 
     const productData = {
       name: name.trim(),
       brand: brand.trim(),
-      category: CATEGORIES_MAP[formCategory], // Lưu value tiếng Anh vào DB
-      price: parsedPrice,
+      category: CATEGORIES_MAP[formCategory],
+      price: defaultPrice, 
       stock: parsedStock,
       description: description.trim(),
       image: imageUri || "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80",
-      sizes: parsedSizes,
+      sizes: parsedVariants,
     };
 
     try {
@@ -240,7 +268,7 @@ export default function AdminProducts() {
         await api.post('/api/products', productData);
       }
       closeForm();
-      loadProducts(); // Tải lại danh sách từ DB
+      loadProducts(); 
     } catch (err: any) {
       setError(err?.response?.data?.message || "Có lỗi xảy ra khi lưu sản phẩm.");
     }
@@ -251,7 +279,7 @@ export default function AdminProducts() {
     try {
       await api.delete(`/api/products/${deleteId}`);
       setDeleteId(null);
-      loadProducts(); // Tải lại danh sách từ DB
+      loadProducts(); 
     } catch (error) {
       Alert.alert("Lỗi", "Không thể xóa sản phẩm này.");
     }
@@ -387,7 +415,6 @@ export default function AdminProducts() {
                       <Ionicons name="image-outline" size={48} color="#D9A7B7" />
                     )}
                     <View style={styles.productCategoryBadge}>
-                      {/* Hiển thị tên danh mục tiếng Việt */}
                       <Text style={styles.productCategory}>
                         {Object.keys(CATEGORIES_MAP).find(k => CATEGORIES_MAP[k] === product.category) || product.category}
                       </Text>
@@ -402,7 +429,9 @@ export default function AdminProducts() {
                   <View style={styles.productDetails}>
                     <Text style={styles.productName}>{product.name}</Text>
                     <Text style={styles.productDescription}>{product.brand || "Chưa có thương hiệu"}</Text>
-                    <Text style={styles.productPrice}>{formatPrice(product.price)}</Text>
+                    <Text style={styles.productPrice}>
+                      Từ {formatPrice(product.price)}
+                    </Text>
                     
                     <View style={styles.stockRow}>
                       <Text style={styles.stockLabel}>Tồn kho</Text>
@@ -446,7 +475,6 @@ export default function AdminProducts() {
 
       {/* MODAL THÊM / SỬA SẢN PHẨM */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeForm}>
-        {/* 👇 Bọc nội dung bằng KeyboardAvoidingView */}
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
           style={{ flex: 1 }}
@@ -460,7 +488,7 @@ export default function AdminProducts() {
 
               <ScrollView 
                 showsVerticalScrollIndicator={false} 
-                keyboardShouldPersistTaps="handled" // Đã có sẵn, rất tốt
+                keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{ paddingBottom: 20 }}
               >
                 <Pressable style={styles.imagePicker} onPress={pickImage}>
@@ -489,14 +517,52 @@ export default function AdminProducts() {
                   ))}
                 </View>
 
-                <Text style={styles.inputLabel}>Giá bán (VNĐ) *</Text>
-                <TextInput value={price} onChangeText={setPrice} placeholder="Ví dụ: 259000" placeholderTextColor="#B6A9AE" keyboardType="numeric" style={styles.input} />
-
                 <Text style={styles.inputLabel}>Số lượng tồn kho *</Text>
                 <TextInput value={stock} onChangeText={setStock} placeholder="Nhập số lượng" placeholderTextColor="#B6A9AE" keyboardType="numeric" style={styles.input} />
 
-                <Text style={styles.inputLabel}>Dung tích (Cách nhau bởi dấu phẩy)</Text>
-                <TextInput value={sizes} onChangeText={setSizes} placeholder="Ví dụ: 30ml, 50ml" placeholderTextColor="#B6A9AE" style={styles.input} />
+                {/* 🌟 PHẦN NHẬP PHÂN LOẠI (DUNG TÍCH & GIÁ) */}
+                <Text style={styles.inputLabel}>Phân loại (Dung tích & Giá) *</Text>
+                {variants.map((variant, index) => (
+                  <View key={index} style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                    <TextInput 
+                      style={[styles.input, { flex: 1 }]} 
+                      placeholder="Dung tích (VD: 30ml)" 
+                      value={variant.size} 
+                      onChangeText={(text) => {
+                        const newV = [...variants];
+                        newV[index].size = text;
+                        setVariants(newV);
+                      }} 
+                    />
+                    <TextInput 
+                      style={[styles.input, { flex: 1 }]} 
+                      placeholder="Giá (VD: 150.000)" 
+                      keyboardType="numeric"
+                      value={variant.price} 
+                      onChangeText={(text) => {
+                        const newV = [...variants];
+                        newV[index].price = formatCurrency(text);
+                        setVariants(newV);
+                      }} 
+                    />
+                    {variants.length > 1 && (
+                      <Pressable 
+                        onPress={() => setVariants(variants.filter((_, i) => i !== index))} 
+                        style={{ justifyContent: 'center', paddingHorizontal: 5 }}
+                      >
+                        <Ionicons name="trash-outline" size={22} color="#D96C7C" />
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+                
+                <Pressable 
+                  onPress={() => setVariants([...variants, { size: '', price: '' }])} 
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 15, marginTop: 5 }}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color={PINK} />
+                  <Text style={{ color: PINK, fontWeight: '700', fontSize: 13 }}>Thêm phân loại</Text>
+                </Pressable>
 
                 <Text style={styles.inputLabel}>Mô tả</Text>
                 <TextInput value={description} onChangeText={setDescription} placeholder="Mô tả sản phẩm..." placeholderTextColor="#B6A9AE" multiline style={[styles.input, styles.descriptionInput]} />
@@ -532,7 +598,6 @@ export default function AdminProducts() {
 }
 
 const styles = StyleSheet.create({
-  // ... (Giữ nguyên toàn bộ style cũ của bạn)
   root: { flex: 1, flexDirection: "row", backgroundColor: BG, overflow: "hidden" },
   main: { flex: 1, minWidth: 0, backgroundColor: BG },
   sidebar: { width: 250, flexShrink: 0, backgroundColor: "#FFFFFF", paddingHorizontal: 18, paddingTop: 30, paddingBottom: 15, borderRightWidth: 1, borderRightColor: "#F3E9ED", justifyContent: "space-between" },
@@ -619,9 +684,9 @@ const styles = StyleSheet.create({
   imagePickerText: { color: "#B65D7B", fontWeight: "700", fontSize: 12, marginTop: 7 },
   imagePickerHint: { color: MUTED, fontSize: 10, marginTop: 4 },
   inputLabel: { color: DARK, fontSize: 11, fontWeight: "700", marginBottom: 7, marginTop: 11 },
-  input: { minHeight: 44, borderWidth: 1, borderColor: "#EEDFE5", backgroundColor: "#FFFBFC", borderRadius: 11, paddingHorizontal: 12, color: DARK, fontSize: 12 },
+  input: { minHeight: 44, borderWidth: 1, borderColor: "#EEDFE5", backgroundColor: "#FFFBFC", borderRadius: 11, paddingHorizontal: 12, color: DARK, fontSize: 12, marginBottom: 0 },
   descriptionInput: { minHeight: 85, textAlignVertical: "top", paddingTop: 12 },
-  formCategoryWrap: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  formCategoryWrap: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 10 },
   formCategoryChip: { borderWidth: 1, borderColor: "#EEDFE5", borderRadius: 18, paddingHorizontal: 11, paddingVertical: 8 },
   formCategoryActive: { backgroundColor: PINK, borderColor: PINK },
   formCategoryText: { color: "#927C84", fontSize: 10, fontWeight: "600" },

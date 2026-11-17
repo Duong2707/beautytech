@@ -49,7 +49,7 @@ export default function HomeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [tempQuantity, setTempQuantity] = useState(1);
-  const [tempSize, setTempSize] = useState('Mặc định');
+  const [tempVariant, setTempVariant] = useState<any>(null); // Lưu object {size, price}
 
   const categoryScrollRef = useRef<any>(null);
 
@@ -88,21 +88,27 @@ export default function HomeScreen() {
   const handleOpenAddModal = (product: any) => {
     setSelectedProduct(product);
     setTempQuantity(1);
-    setTempSize(product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'Mặc định');
+    
+    // Mặc định chọn dung tích đầu tiên
+    if (product.sizes && product.sizes.length > 0 && typeof product.sizes[0] === 'object') {
+      setTempVariant(product.sizes[0]);
+    } else {
+      setTempVariant({ size: 'Mặc định', price: product.price });
+    }
     setModalVisible(true);
   };
 
-  const handleConfirmAdd = () => {
+  const handleConfirmAdd = async () => {
     if (!selectedProduct) return;
-    addToCart({ 
-      id: selectedProduct._id, 
-      name: selectedProduct.name, 
-      price: `${selectedProduct.price.toLocaleString('vi-VN')}đ`, 
-      priceValue: selectedProduct.price, 
-      image: selectedProduct.image || FALLBACK_IMAGE
-    }, tempQuantity, tempSize);
+    
+    // Tạo object với giá của dung tích đang chọn
+    const productToAdd = {
+      ...selectedProduct,
+      price: tempVariant ? tempVariant.price : selectedProduct.price
+    };
+
+    await addToCart(productToAdd, tempQuantity, tempVariant?.size || 'Mặc định');
     setModalVisible(false);
-    Alert.alert("Thành công", `Đã thêm ${tempQuantity} ${selectedProduct.name} vào giỏ.`);
   };
 
   const totalCartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -260,7 +266,8 @@ export default function HomeScreen() {
                       <Text style={dynamicStyles.soldText}>({product.sold})</Text>
                     </View>
                     <View style={dynamicStyles.priceRow}>
-                      <Text style={dynamicStyles.productPrice}>{product.price.toLocaleString('vi-VN')}đ</Text>
+                      {/* 🌟 HIỂN THỊ CHỮ "TỪ" */}
+                      <Text style={dynamicStyles.productPrice}>Từ {product.price.toLocaleString('vi-VN')}đ</Text>
                     </View>
                   </View>
                 </Pressable>
@@ -338,16 +345,27 @@ export default function HomeScreen() {
                 <View style={dynamicStyles.modalProductInfo}>
                   <Image source={{ uri: selectedProduct.image || FALLBACK_IMAGE }} style={dynamicStyles.modalImage} />
                   <View style={dynamicStyles.modalTextInfo}>
-                    <Text style={dynamicStyles.modalPrice}>{selectedProduct.price.toLocaleString('vi-VN')}đ</Text>
+                    <Text style={dynamicStyles.modalPrice}>
+                      {tempVariant ? tempVariant.price.toLocaleString('vi-VN') : selectedProduct.price.toLocaleString('vi-VN')}đ
+                    </Text>
                   </View>
                 </View>
-                <Text style={dynamicStyles.modalLabel}>Phân loại:</Text>
+                <Text style={dynamicStyles.modalLabel}>Phân loại (Dung tích):</Text>
                 <View style={dynamicStyles.modalSizeRow}>
-                  {selectedProduct.sizes?.map((size: string) => (
-                    <Pressable key={size} style={[dynamicStyles.modalSizeBtn, tempSize === size && dynamicStyles.modalSizeBtnActive]} onPress={() => setTempSize(size)}>
-                      <Text style={[dynamicStyles.modalSizeText, tempSize === size && dynamicStyles.modalSizeTextActive]}>{size}</Text>
-                    </Pressable>
-                  ))}
+                  {selectedProduct.sizes?.map((variant: any) => {
+                    const isSelected = tempVariant?.size === variant.size;
+                    return (
+                      <Pressable 
+                        key={variant.size} 
+                        style={[dynamicStyles.modalSizeBtn, isSelected && dynamicStyles.modalSizeBtnActive]} 
+                        onPress={() => setTempVariant(variant)}
+                      >
+                        <Text style={[dynamicStyles.modalSizeText, isSelected && dynamicStyles.modalSizeTextActive]}>
+                          {variant.size}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
                 <View style={dynamicStyles.modalQtyRow}>
                   <Text style={dynamicStyles.modalLabel}>Số lượng:</Text>

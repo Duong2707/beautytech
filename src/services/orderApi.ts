@@ -35,10 +35,17 @@ export const createOrderApi = async (_token: string, orderData: any) => {
 
 export const fetchOrdersApi = async () => {
   try {
-    // Lưu ý: Nếu Backend của bạn có route riêng cho Admin (ví dụ: /api/orders/admin) thì phải đổi URL ở đây nhé!
+    // 👇 1. Kiểm tra Token trước khi gọi API để tránh lỗi 401 khi chưa đăng nhập
+    const token = await AsyncStorage.getItem('@token');
+    if (!token) {
+      console.log('[orderApi] Chưa có Token, không gọi API lấy đơn hàng.');
+      const cached = await AsyncStorage.getItem(CACHE_KEY_ORDERS);
+      return { success: true, data: cached ? JSON.parse(cached) : [] };
+    }
+
     const res = await api.get('/api/orders');
     
-    // Khi có mạng, cập nhật lại Cache
+    // Khi có mạng và lấy thành công, cập nhật lại Cache
     await AsyncStorage.setItem(CACHE_KEY_ORDERS, JSON.stringify(res.data.data || res.data));
     return res.data;
   } catch (error: any) {
@@ -47,35 +54,45 @@ export const fetchOrdersApi = async () => {
       console.log('[orderApi] Mất mạng thực sự, đang dùng cache đơn hàng...');
       const cached = await AsyncStorage.getItem(CACHE_KEY_ORDERS);
       return { success: true, data: cached ? JSON.parse(cached) : [] };
-    } else {
-      // 👇 IN RA LỖI THẬT TỪ SERVER (Để biết tại sao không lấy được data)
+    } 
+    // 👇 2. Xử lý lỗi 401 (Token hết hạn hoặc không hợp lệ)
+    else if (error.response?.status === 401) {
+      console.log('⚠️ [orderApi] Token không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.');
+      // Xóa token cũ để buộc người dùng đăng nhập lại
+      await AsyncStorage.removeItem('@token');
+      return { success: false, data: [] };
+    } 
+    // 👇 3. Các lỗi Server khác (500, 404...)
+    else {
       console.error('❌ [orderApi] Lỗi từ Server:', error.response?.status, error.response?.data);
-      
-      // Trả về mảng rỗng nếu lỗi, tránh crash app
       return { success: false, data: [] }; 
     }
   }
 };
 
-// Các hàm update, review, cancel giữ nguyên...
+// Cập nhật trạng thái đơn hàng (Admin)
 export const updateOrderStatusApi = async (orderId: string, status: string) => {
   try {
     const res = await api.put(`/api/orders/${orderId}/status`, { status });
     return res.data;
   } catch (error: any) {
-    throw new Error("Lỗi cập nhật trạng thái");
+    console.error('Lỗi updateOrderStatusApi:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.message || "Lỗi cập nhật trạng thái");
   }
 };
 
+// Gửi đánh giá
 export const submitReviewApi = async (orderId: string, rating: number, comment: string) => {
   try {
     const res = await api.put(`/api/orders/${orderId}/review`, { rating, comment });
     return res.data;
   } catch (error: any) {
-    throw new Error("Lỗi gửi đánh giá");
+    console.error('Lỗi submitReviewApi:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.message || "Lỗi gửi đánh giá");
   }
 };
 
+// Hủy đơn hàng (Khách hàng)
 export const cancelOrderApi = async (orderId: string) => {
   try {
     const res = await api.put(`/api/orders/${orderId}/cancel`);
@@ -98,6 +115,9 @@ export const cancelOrderApi = async (orderId: string) => {
       
       return { success: true, isOffline: true };
     }
-    throw new Error("Lỗi hủy đơn hàng");
+    
+    // Các lỗi khác (ví dụ: Server báo không thể hủy vì đơn đã giao)
+    console.error('Lỗi cancelOrderApi:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.message || "Lỗi hủy đơn hàng");
   }
 };

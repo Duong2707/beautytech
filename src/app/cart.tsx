@@ -24,8 +24,19 @@ export default function CartScreen() {
   const { cart, loadingCart, removeFromCart, removeSelectedFromCart, clearCart, updateQuantity, toggleSelect, toggleSelectAll } = useCart();
   const { theme } = useTheme();
 
+  // 🌟 Hàm lấy giá tiền chuẩn xác của dung tích đã chọn
+  const getItemPrice = (item: any) => {
+    if (item.product?.sizes && item.product.sizes.length > 0 && typeof item.product.sizes[0] === 'object') {
+      const variant = item.product.sizes.find((s: any) => s.size === item.size);
+      if (variant) return variant.price;
+    }
+    return item.product?.price || 0;
+  };
+
   const selectedItems = cart.filter(item => item.selected);
-  const totalPrice = selectedItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  
+  // 👇 Sử dụng hàm getItemPrice để tính tổng tiền
+  const totalPrice = selectedItems.reduce((sum, item) => sum + (getItemPrice(item) * item.quantity), 0);
   const isAllSelected = cart.length > 0 && cart.every(item => item.selected);
 
   const formatPrice = (price: number) => price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.') + 'đ';
@@ -101,7 +112,8 @@ export default function CartScreen() {
                   {item.size ? <Text style={dynamicStyles.itemSize}>Phân loại: {item.size}</Text> : null}
                   
                   <View style={dynamicStyles.bottomRow}>
-                    <Text style={dynamicStyles.itemPrice}>{item.product?.price?.toLocaleString('vi-VN')}đ</Text>
+                    {/* 👇 Hiển thị giá theo dung tích */}
+                    <Text style={dynamicStyles.itemPrice}>{getItemPrice(item).toLocaleString('vi-VN')}đ</Text>
                     <View style={dynamicStyles.quantityContainer}>
                       <Pressable style={dynamicStyles.qtyBtn} onPress={() => updateQuantity(item._id, item.quantity - 1)}>
                         <Ionicons name="remove" size={16} color={theme.text} />

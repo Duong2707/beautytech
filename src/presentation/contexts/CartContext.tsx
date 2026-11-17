@@ -34,7 +34,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [loadingCart, setLoadingCart] = useState(false);
   const { user } = useAuth(); 
 
-  // Hàm phụ trợ để cập nhật state và cache
   const updateCartState = async (newCart: CartItem[]) => {
     setCart(newCart);
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(newCart));
@@ -53,11 +52,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try {
       setLoadingCart(true);
       
-      // 1. Lấy từ Cache hiển thị trước (Offline-First)
       const cached = await AsyncStorage.getItem(CACHE_KEY);
       if (cached) setCart(JSON.parse(cached));
 
-      // 2. Gọi API để đồng bộ
       const res = await api.get('/api/cart');
       if (res.data.success) {
         const serverCart = res.data.data.items || [];
@@ -83,10 +80,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
 
     if (existingIndex > -1) {
+      // 👇 Cập nhật số lượng và giá mới nhất (nếu có thay đổi)
       newCart[existingIndex].quantity += quantity;
+      newCart[existingIndex].product.price = product.price;
     } else {
       newCart.push({
-        _id: 'offline_cart_' + Date.now(), // ID tạm nếu offline
+        _id: 'offline_cart_' + Date.now(), 
         product,
         quantity,
         selected: true,
@@ -103,17 +102,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
         size
       });
       if (res.data.success) {
-        updateCartState(res.data.data.items); // Đồng bộ lại với data chuẩn từ Server
-        Alert.alert("Thành công", `Đã thêm ${quantity} ${product.name} vào giỏ hàng.`);
+        updateCartState(res.data.data.items); 
+        Alert.alert("Thành công", `Đã thêm ${quantity} ${product.name} (${size}) vào giỏ hàng.`);
       }
     } catch (error: any) {
       if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
-        // 3. Lỗi mạng -> Đưa vào hàng đợi
         await addToOfflineQueue('POST', '/api/cart/add', { productId: product._id || product.id, quantity, size });
-        Alert.alert("Lưu ngoại tuyến", `Đã thêm ${quantity} ${product.name} vào giỏ (Sẽ đồng bộ khi có mạng).`);
+        Alert.alert("Lưu ngoại tuyến", `Đã thêm ${quantity} ${product.name} (${size}) vào giỏ (Sẽ đồng bộ khi có mạng).`);
       } else {
         Alert.alert('Lỗi', error.response?.data?.message || 'Không thể thêm vào giỏ hàng.');
-        fetchCart(); // Revert lại nếu lỗi logic
+        fetchCart(); 
       }
     }
   };
@@ -121,7 +119,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const updateQuantity = async (itemId: string, quantity: number) => {
     if (quantity < 1) return;
 
-    // 1. Cập nhật giao diện ngay lập tức
     const newCart = cart.map(item => item._id === itemId ? { ...item, quantity } : item);
     await updateCartState(newCart);
 
@@ -140,7 +137,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!item) return;
     const newSelected = !item.selected;
 
-    // 1. Cập nhật giao diện
     const newCart = cart.map(i => i._id === itemId ? { ...i, selected: newSelected } : i);
     await updateCartState(newCart);
 
@@ -155,11 +151,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleSelectAll = async (selected: boolean) => {
-    // 1. Cập nhật giao diện
     const newCart = cart.map(item => ({ ...item, selected }));
     await updateCartState(newCart);
 
-    // 2. Gửi API cho từng món (nếu offline thì queue)
     for (const item of cart) {
       if (item.selected !== selected) {
         try {
@@ -174,7 +168,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const removeFromCart = async (itemId: string) => {
-    // 1. Cập nhật giao diện
     const newCart = cart.filter(i => i._id !== itemId);
     await updateCartState(newCart);
 
@@ -208,11 +201,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const selectedItems = cart.filter(item => item.selected);
     if (selectedItems.length === 0) return;
 
-    // 1. Cập nhật giao diện
     const newCart = cart.filter(item => !item.selected);
     await updateCartState(newCart);
 
-    // 2. Gọi API xóa từng món
     for (const item of selectedItems) {
       try {
         await api.delete(`/api/cart/remove/${item._id}`);

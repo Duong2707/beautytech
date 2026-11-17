@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, Modal, Alert, useWindowDimensions, ActivityIndicator, Pressable,  KeyboardAvoidingView, Platform
+  View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, Modal, Alert, useWindowDimensions, ActivityIndicator, Pressable, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import api from '../../data/datasources/remote/api';
 import { useAuth } from '../../presentation/contexts/AuthContext'; 
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type Voucher = {
   _id: string;
@@ -29,12 +30,18 @@ const menuItems = [
   { label: 'Tổng quan', icon: 'grid-outline', route: '/admin' },
   { label: 'Sản phẩm', icon: 'cube-outline', route: '/admin/products' },
   { label: 'Đơn hàng', icon: 'receipt-outline', route: '/admin/orders' },
-//  { label: 'Shipper', icon: 'bicycle-outline', route: '/admin/shippers' },
   { label: 'Voucher', icon: 'ticket-outline', route: '/admin/vouchers' },
   { label: 'Thông báo', icon: 'notifications-outline', route: '/admin/notifications' },
 ];
 
 const formatMoney = (value: number) => value.toLocaleString('vi-VN') + 'đ';
+
+// 🌟 HÀM FORMAT TIỀN TỆ CÓ DẤU CHẤM
+const formatCurrency = (text: string) => {
+  const number = text.replace(/\D/g, ''); // Bỏ tất cả ký tự không phải số
+  if (!number) return '';
+  return Number(number).toLocaleString('vi-VN'); // Trả về chuỗi có dấu chấm
+};
 
 export default function AdminVouchersScreen() {
   const router = useRouter();
@@ -56,7 +63,10 @@ export default function AdminVouchersScreen() {
   const [value, setValue] = useState('');
   const [minOrder, setMinOrder] = useState('');
   const [quantity, setQuantity] = useState('');
+  
+  // 🌟 STATE CHO NGÀY HẾT HẠN
   const [expiry, setExpiry] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // 🌟 GỌI API LẤY DANH SÁCH
   useEffect(() => {
@@ -101,11 +111,24 @@ export default function AdminVouchersScreen() {
     setCode(voucher.code);
     setDescription(voucher.description);
     setType(voucher.type);
-    setValue(String(voucher.value));
-    setMinOrder(String(voucher.minOrder));
+    // Format lại tiền tệ khi mở form sửa
+    setValue(voucher.type === 'fixed' ? Number(voucher.value).toLocaleString('vi-VN') : String(voucher.value));
+    setMinOrder(Number(voucher.minOrder).toLocaleString('vi-VN'));
     setQuantity(String(voucher.quantity));
     setExpiry(voucher.expiry);
     setModalVisible(true);
+  };
+
+  // 🌟 HÀM XỬ LÝ KHI CHỌN NGÀY TRÊN MOBILE
+  const onChangeDate = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios'); 
+    
+    if (selectedDate) {
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      setExpiry(`${year}-${month}-${day}`);
+    }
   };
 
   // 🌟 LƯU VÀO DATABASE
@@ -115,8 +138,9 @@ export default function AdminVouchersScreen() {
       return;
     }
 
-    const numericValue = Number(value);
-    const numericMinOrder = Number(minOrder || 0);
+    // 🌟 SỬA TẠI ĐÂY: Xóa dấu chấm trước khi lưu vào Database
+    const numericValue = type === 'fixed' ? Number(value.replace(/\./g, '')) : Number(value);
+    const numericMinOrder = Number(minOrder.replace(/\./g, '') || 0);
     const numericQuantity = Number(quantity);
 
     const voucherData = {
@@ -329,16 +353,17 @@ export default function AdminVouchersScreen() {
 
       {/* MODAL TẠO / SỬA VOUCHER */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        
-        {/* 👇 Bọc nội dung bằng KeyboardAvoidingView */}
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
           style={{ flex: 1 }}
         >
           <Pressable style={styles.overlay} onPress={() => setModalVisible(false)}>
-            <View style={styles.modalCard} onStartShouldSetResponder={() => true} >
+            <View 
+              style={styles.modalCard} 
+              onStartShouldSetResponder={() => true}
+              {...(Platform.OS === 'web' ? { onClick: (e: any) => e.stopPropagation() } : {})}
+            >
               
-              {/* ScrollView đã có sẵn keyboardShouldPersistTaps="handled" nên rất tốt */}
               <ScrollView 
                 showsVerticalScrollIndicator={false} 
                 keyboardShouldPersistTaps="handled"
@@ -355,25 +380,87 @@ export default function AdminVouchersScreen() {
 
                 <Text style={styles.inputLabel}>Loại giảm giá</Text>
                 <View style={styles.typeRow}>
-                  <TouchableOpacity style={[styles.typeButton, type === 'percent' && styles.typeActive]} onPress={() => setType('percent')}>
+                  <TouchableOpacity style={[styles.typeButton, type === 'percent' && styles.typeActive]} onPress={() => { setType('percent'); setValue(''); }}>
                     <Text style={[styles.typeText, type === 'percent' && styles.typeTextActive]}>Phần trăm (%)</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.typeButton, type === 'fixed' && styles.typeActive]} onPress={() => setType('fixed')}>
+                  <TouchableOpacity style={[styles.typeButton, type === 'fixed' && styles.typeActive]} onPress={() => { setType('fixed'); setValue(''); }}>
                     <Text style={[styles.typeText, type === 'fixed' && styles.typeTextActive]}>Số tiền (VNĐ)</Text>
                   </TouchableOpacity>
                 </View>
 
                 <Text style={styles.inputLabel}>Giá trị giảm {type === 'percent' ? '(%)' : '(VNĐ)'}</Text>
-                <TextInput style={styles.input} placeholder={type === 'percent' ? 'Ví dụ: 15' : 'Ví dụ: 50000'} keyboardType="numeric" value={value} onChangeText={setValue} />
+                <TextInput 
+                  style={styles.input} 
+                  placeholder={type === 'percent' ? 'Ví dụ: 15' : 'Ví dụ: 50.000'} 
+                  keyboardType="numeric" 
+                  value={value} 
+                  onChangeText={(text) => {
+                    // Nếu là %, chỉ nhập số. Nếu là VNĐ, format có dấu chấm
+                    setValue(type === 'fixed' ? formatCurrency(text) : text.replace(/\D/g, '')); 
+                  }} 
+                />
 
                 <Text style={styles.inputLabel}>Giá trị đơn hàng tối thiểu (VNĐ)</Text>
-                <TextInput style={styles.input} placeholder="Ví dụ: 200000" keyboardType="numeric" value={minOrder} onChangeText={setMinOrder} />
+                <TextInput 
+                  style={styles.input} 
+                  placeholder="Ví dụ: 200.000" 
+                  keyboardType="numeric" 
+                  value={minOrder} 
+                  onChangeText={(text) => setMinOrder(formatCurrency(text))} 
+                />
 
                 <Text style={styles.inputLabel}>Số lượng voucher</Text>
                 <TextInput style={styles.input} placeholder="Ví dụ: 100" keyboardType="numeric" value={quantity} onChangeText={setQuantity} />
 
-                <Text style={styles.inputLabel}>Ngày hết hạn (YYYY-MM-DD)</Text>
-                <TextInput style={styles.input} placeholder="2026-12-31" value={expiry} onChangeText={setExpiry} />
+                {/* 🌟 XỬ LÝ NGÀY HẾT HẠN (HỖ TRỢ CẢ WEB VÀ MOBILE) */}
+                <Text style={styles.inputLabel}>Ngày hết hạn</Text>
+                
+                {Platform.OS === 'web' ? (
+                  // 🌐 DÀNH RIÊNG CHO WEB: Dùng thẻ <input type="date"> của HTML
+                  <View style={styles.input}>
+                    {React.createElement('input', {
+                      type: 'date',
+                      value: expiry,
+                      min: new Date().toISOString().split('T')[0], // 👈 CHẶN NGÀY QUÁ KHỨ TRÊN WEB
+                      onChange: (e: any) => setExpiry(e.target.value),
+                      onClick: (e: any) => e.stopPropagation(),
+                      style: {
+                        border: 'none',
+                        outline: 'none',
+                        background: 'transparent',
+                        width: '100%',
+                        height: '100%',
+                        fontFamily: 'inherit',
+                        fontSize: '13px',
+                        color: DARK,
+                        cursor: 'pointer',
+                      }
+                    })}
+                  </View>
+                ) : (
+                  // 📱 DÀNH CHO MOBILE: Dùng nút bấm hiện lịch
+                  <>
+                    <TouchableOpacity 
+                      style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]} 
+                      onPress={() => setShowDatePicker(true)}
+                    >
+                      <Text style={{ color: expiry ? DARK : '#AAAAAA', fontSize: 13 }}>
+                        {expiry ? expiry : 'Chọn ngày hết hạn'}
+                      </Text>
+                      <Ionicons name="calendar-outline" size={18} color={MUTED} />
+                    </TouchableOpacity>
+
+                    {showDatePicker && (
+                      <DateTimePicker
+                        value={expiry ? new Date(expiry) : new Date()}
+                        mode="date"
+                        display="default"
+                        onChange={onChangeDate}
+                        minimumDate={new Date(new Date().setHours(0, 0, 0, 0))} // 👈 CHẶN CHÍNH XÁC TỪ 0H SÁNG NAY
+                      />
+                    )}
+                  </>
+                )}
 
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
@@ -388,15 +475,12 @@ export default function AdminVouchersScreen() {
             </View>
           </Pressable >
         </KeyboardAvoidingView>
-
       </Modal>
     </View>
   );
 }
 
-// Bạn giữ nguyên toàn bộ phần `styles = StyleSheet.create({...})` cũ của bạn nhé
 const styles = StyleSheet.create({
-  // ... copy toàn bộ styles cũ vào đây ...
   container: { flex: 1, flexDirection: 'row', backgroundColor: BG },
   sidebar: { width: 250, backgroundColor: '#FFFFFF', paddingHorizontal: 18, paddingTop: 30, paddingBottom: 15, borderRightWidth: 1, borderRightColor: '#F3E9ED' },
   mobileSidebar: { width: 250, height: '100%', elevation: 5 },
@@ -474,7 +558,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '800', color: DARK },
   modalSubtitle: { color: MUTED, fontSize: 12, marginTop: 6, marginBottom: 18 },
   inputLabel: { fontSize: 12, color: '#51434A', fontWeight: '700', marginBottom: 6 },
-  input: { height: 43, borderWidth: 1, borderColor: '#EEE3E8', borderRadius: 9, paddingHorizontal: 12, fontSize: 13, marginBottom: 13, color: DARK },
+  input: { height: 43, borderWidth: 1, borderColor: '#EEE3E8', borderRadius: 9, paddingHorizontal: 12, fontSize: 13, marginBottom: 13, color: DARK, justifyContent: 'center' },
   typeRow: { flexDirection: 'row', gap: 9, marginBottom: 15 },
   typeButton: { flex: 1, padding: 11, borderRadius: 9, borderWidth: 1, borderColor: '#EEE3E8', alignItems: 'center' },
   typeActive: { backgroundColor: '#FCEEF2', borderColor: '#C45B83' },

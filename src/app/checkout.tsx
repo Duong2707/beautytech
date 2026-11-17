@@ -21,8 +21,19 @@ export default function CheckoutScreen() {
   const { theme } = useTheme();
   const { user } = useAuth(); 
 
+  // 🌟 Hàm lấy giá tiền chuẩn xác của dung tích đã chọn
+  const getItemPrice = (item: any) => {
+    if (item.product?.sizes && item.product.sizes.length > 0 && typeof item.product.sizes[0] === 'object') {
+      const variant = item.product.sizes.find((s: any) => s.size === item.size);
+      if (variant) return variant.price;
+    }
+    return item.product?.price || 0;
+  };
+
   const selectedItems = cart.filter(item => item.selected);
-  const subTotal = selectedItems.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  
+  // 👇 Sử dụng hàm getItemPrice để tính tổng tiền hàng
+  const subTotal = selectedItems.reduce((sum, item) => sum + (getItemPrice(item) * item.quantity), 0);
 
   const [currentAddress, setCurrentAddress] = useState<any>(null);
   const [isLoadingAddress, setIsLoadingAddress] = useState(true);
@@ -39,7 +50,6 @@ export default function CheckoutScreen() {
   const [isOrderPlaced, setIsOrderPlaced] = useState(false);
 
   useEffect(() => {
-    // Tạo mã đơn hàng ngẫu nhiên khi vào màn hình
     setCurrentOrderId('ORD' + Math.floor(Math.random() * 1000000));
     loadVouchers();
   }, []);
@@ -102,7 +112,6 @@ export default function CheckoutScreen() {
   // 🌟 VÒNG LẶP KIỂM TRA TRẠNG THÁI THANH TOÁN
   useEffect(() => {
     let interval: any;
-    // Chỉ chạy khi đã tạo đơn hàng QR và chưa thanh toán
     if (payment === 'qr' && isOrderPlaced && !isPaid && currentOrderId) {
       interval = setInterval(async () => {
         try {
@@ -110,9 +119,8 @@ export default function CheckoutScreen() {
           if (!netState.isConnected) return;
 
           const res = await api.get(`/api/payment/check-status/${currentOrderId}`);
-          console.log("Check thanh toán trả về:", res.data); // Debug dữ liệu trả về
+          console.log("Check thanh toán trả về:", res.data);
 
-          // Kiểm tra cấu trúc dữ liệu trả về (đề phòng Backend bọc trong .data)
           const status = res.data?.status || res.data?.data?.status;
           
           if (status === 'paid') {
@@ -129,7 +137,7 @@ export default function CheckoutScreen() {
   useEffect(() => {
     if (isPaid && payment === 'qr') {
       const handleSuccess = async () => {
-        await removeSelectedFromCart(); // Xóa giỏ hàng
+        await removeSelectedFromCart();
         if (Platform.OS === 'web') {
           window.alert('Thanh toán thành công! Đơn hàng đang được xử lý.');
           router.replace('/home');
@@ -140,7 +148,6 @@ export default function CheckoutScreen() {
         }
       };
       
-      // Đợi 1.5s cho người dùng thấy dấu tích xanh rồi mới chuyển trang
       const timer = setTimeout(() => {
         handleSuccess();
       }, 1500);
@@ -176,7 +183,7 @@ export default function CheckoutScreen() {
     return `https://img.vietqr.io/image/${bankId}-${accountNo}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
   };
 
-  // 🌟 HÀM XỬ LÝ ĐẶT HÀNG ĐÃ ĐƯỢC CẤU TRÚC LẠI
+  // 🌟 HÀM XỬ LÝ ĐẶT HÀNG
   const handlePlaceOrder = async (isAuto = false) => {
     if (selectedItems.length === 0) { 
       if (!isAuto) Alert.alert('Lỗi', 'Không có sản phẩm nào để thanh toán!'); 
@@ -199,10 +206,11 @@ export default function CheckoutScreen() {
         orderId: currentOrderId || ('ORD' + Math.floor(Math.random() * 1000000)),
         recipientName: finalRecipientName,
         phone: finalPhone,
+        // 👇 SỬ DỤNG getItemPrice ĐỂ LƯU ĐÚNG GIÁ CỦA TỪNG SIZE
         items: selectedItems.map(item => ({
           productId: item.product._id,
           name: item.product.name,
-          price: item.product.price,
+          price: getItemPrice(item), 
           image: item.product.image || FALLBACK_IMAGE,
           quantity: item.quantity,
           size: item.size
@@ -213,25 +221,16 @@ export default function CheckoutScreen() {
         total: totalPrice,
         address: currentAddress.address,
         paymentMethod: payment,
-        paymentStatus: payment === 'qr' ? 'pending' : 'unpaid', // QR ban đầu luôn pending
+        paymentStatus: payment === 'qr' ? 'pending' : 'unpaid',
         orderStatus: 'pending',
       };
 
-      // 1. Gọi API lưu đơn hàng vào Database
-      console.log("👉 Dữ liệu đơn hàng chuẩn bị gửi lên:", newOrder); // Xem dữ liệu gửi đi
-      
       const res = await createOrderApi(user?.token || 'fake_token', newOrder);
-      
-      console.log("👉 Kết quả API tạo đơn trả về:", res); // Xem API trả về cái gì
-      
       const isOfflineOrder = res && res.isOffline;
 
-      // 2. PHÂN NHÁNH XỬ LÝ
       if (payment === 'qr') {
-        // Nếu là QR: Bật cờ isOrderPlaced để hiện mã QR, KHÔNG chuyển trang, KHÔNG xóa giỏ hàng
         setIsOrderPlaced(true);
       } else {
-        // Nếu là COD: Xóa giỏ hàng và chuyển về Home luôn
         await removeSelectedFromCart(); 
         if (Platform.OS === 'web') {
           if (!isAuto) window.alert(isOfflineOrder ? 'Đơn hàng đã được lưu ngoại tuyến!' : 'Đặt hàng thành công!');
@@ -388,7 +387,8 @@ export default function CheckoutScreen() {
                 <Text style={dynamicStyles.summarySize}>{item.size}</Text>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={dynamicStyles.summaryPrice}>{item.product?.price.toLocaleString('vi-VN')}đ</Text>
+                {/* 👇 Hiển thị giá theo dung tích */}
+                <Text style={dynamicStyles.summaryPrice}>{getItemPrice(item).toLocaleString('vi-VN')}đ</Text>
                 <Text style={dynamicStyles.summaryQty}>x{item.quantity}</Text>
               </View>
             </View>

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Image, Pressable, StyleSheet, StatusBar, Alert, ActivityIndicator, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { sqliteStorage as AsyncStorage } from '../data/datasources/local/sqliteStorage';  // 🌟 Thêm import để đọc Cache
+import { sqliteStorage as AsyncStorage } from '../data/datasources/local/sqliteStorage';
 import { useCart } from '../presentation/contexts/CartContext'; 
 import { useTheme } from '../presentation/contexts/ThemeContext';
 import { useAuth } from '../presentation/contexts/AuthContext';
@@ -11,6 +11,9 @@ import { useWishlist } from '../presentation/contexts/WishlistContext';
 import { ProductRepositoryImpl } from '../data/repositories/ProductRepositoryImpl';
 
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop&q=80";
+
+// Định nghĩa kiểu dữ liệu cho Phân loại (Dung tích & Giá)
+type ProductVariant = { size: string; price: number };
 
 export default function ProductDetailScreen() {
   const router = useRouter();
@@ -26,9 +29,14 @@ export default function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // State cho dung tích đang chọn ngoài màn hình chính
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+
   const [modalVisible, setModalVisible] = useState(false);
   const [tempQuantity, setTempQuantity] = useState(1);
-  const [tempSize, setTempSize] = useState('Mặc định');
+  
+  // State cho dung tích đang chọn trong Modal
+  const [tempVariant, setTempVariant] = useState<ProductVariant | null>(null);
 
   const totalCartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -44,12 +52,18 @@ export default function ProductDetailScreen() {
         const data = await repo.getById(productId);
         if (data) {
           setProduct(data);
-          if (data.sizes && data.sizes.length > 0) setTempSize(data.sizes[0]);
+          // Mặc định chọn dung tích đầu tiên
+          if (data.sizes && data.sizes.length > 0 && typeof data.sizes[0] === 'object') {
+            setSelectedVariant(data.sizes[0]);
+          } else {
+            // Fallback cho data cũ
+            setSelectedVariant({ size: 'Mặc định', price: data.price });
+          }
         } else {
           setError('Sản phẩm không tồn tại.');
         }
       } catch (err: any) {
-        // 🌟 XỬ LÝ OFFLINE: Nếu lỗi gọi API, tìm trong Cache
+        // Xử lý Offline
         try {
           const cached = await AsyncStorage.getItem('@cached_products');
           if (cached) {
@@ -58,7 +72,11 @@ export default function ProductDetailScreen() {
             
             if (foundProduct) {
               setProduct(foundProduct);
-              if (foundProduct.sizes && foundProduct.sizes.length > 0) setTempSize(foundProduct.sizes[0]);
+              if (foundProduct.sizes && foundProduct.sizes.length > 0 && typeof foundProduct.sizes[0] === 'object') {
+                setSelectedVariant(foundProduct.sizes[0]);
+              } else {
+                setSelectedVariant({ size: 'Mặc định', price: foundProduct.price });
+              }
               setError(null);
             } else {
               setError('Không tìm thấy sản phẩm trong bộ nhớ đệm.');
@@ -87,14 +105,21 @@ export default function ProductDetailScreen() {
 
   const handleOpenModal = () => {
     setTempQuantity(1);
-    if (product?.sizes && product.sizes.length > 0) setTempSize(product.sizes[0]);
-    else setTempSize('Mặc định');
+    // Đồng bộ dung tích đang chọn ngoài màn hình vào Modal
+    setTempVariant(selectedVariant || { size: 'Mặc định', price: product.price });
     setModalVisible(true);
   };
 
   const handleConfirmAdd = async () => {
     if (!product) return;
-    await addToCart(product, tempQuantity, tempSize);
+    
+    // Tạo một bản sao của sản phẩm với giá được ghi đè bởi dung tích đang chọn
+    const productToAdd = {
+      ...product,
+      price: tempVariant ? tempVariant.price : product.price
+    };
+
+    await addToCart(productToAdd, tempQuantity, tempVariant?.size || 'Mặc định');
     setModalVisible(false);
   };
 
@@ -122,7 +147,6 @@ export default function ProductDetailScreen() {
 
   return (
     <View style={dynamicStyles.screen}>
-      {/* 🌟 ĐÃ XÓA backgroundColor ĐỂ HẾT LỖI TS */}
       <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={dynamicStyles.scrollContent}>
         
@@ -170,11 +194,12 @@ export default function ProductDetailScreen() {
           </View>
 
           <Text style={dynamicStyles.productName}>{product.name}</Text>
+          
+          {/* 🌟 HIỂN THỊ GIÁ THEO DUNG TÍCH ĐANG CHỌN */}
           <View style={dynamicStyles.priceContainer}>
-            <Text style={dynamicStyles.price}>{product.price.toLocaleString('vi-VN')}đ</Text>
-            {product.originalPrice > 0 && (
-              <Text style={dynamicStyles.oldPrice}>{product.originalPrice.toLocaleString('vi-VN')}đ</Text>
-            )}
+            <Text style={dynamicStyles.price}>
+              {selectedVariant ? selectedVariant.price.toLocaleString('vi-VN') : product.price.toLocaleString('vi-VN')}đ
+            </Text>
             <View style={dynamicStyles.priceBadge}><Text style={dynamicStyles.priceBadgeText}>Chính hãng</Text></View>
           </View>
           
@@ -185,17 +210,27 @@ export default function ProductDetailScreen() {
             <Text style={dynamicStyles.description}>{product.description}</Text>
           </View>
 
+          {/* 🌟 PHẦN CHỌN DUNG TÍCH */}
           <View style={dynamicStyles.section}>
             <View style={dynamicStyles.sectionHeader}>
               <Text style={dynamicStyles.sectionTitle}>Phân loại (Dung tích)</Text>
-              <Text style={dynamicStyles.selectedSizeText}>{product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'Mặc định'}</Text>
+              <Text style={dynamicStyles.selectedSizeText}>{selectedVariant?.size || 'Mặc định'}</Text>
             </View>
             <View style={dynamicStyles.sizeRow}>
-              {product.sizes?.map((size: string) => (
-                <View key={size} style={dynamicStyles.sizeButton}>
-                  <Text style={dynamicStyles.sizeText}>{size}</Text>
-                </View>
-              ))}
+              {product.sizes?.map((variant: ProductVariant) => {
+                const isSelected = selectedVariant?.size === variant.size;
+                return (
+                  <Pressable 
+                    key={variant.size} 
+                    style={[dynamicStyles.sizeButton, isSelected && dynamicStyles.sizeButtonActive]}
+                    onPress={() => setSelectedVariant(variant)}
+                  >
+                    <Text style={[dynamicStyles.sizeText, isSelected && dynamicStyles.sizeTextActive]}>
+                      {variant.size}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
 
@@ -240,21 +275,29 @@ export default function ProductDetailScreen() {
                 <View style={dynamicStyles.modalProductInfo}>
                   <Image source={{ uri: product.image || FALLBACK_IMAGE }} style={dynamicStyles.modalImage} />
                   <View style={dynamicStyles.modalTextInfo}>
-                    <Text style={dynamicStyles.modalPrice}>{product.price.toLocaleString('vi-VN')}đ</Text>
+                    {/* 🌟 GIÁ HIỂN THỊ TRONG MODAL THAY ĐỔI THEO DUNG TÍCH */}
+                    <Text style={dynamicStyles.modalPrice}>
+                      {tempVariant ? tempVariant.price.toLocaleString('vi-VN') : product.price.toLocaleString('vi-VN')}đ
+                    </Text>
                   </View>
                 </View>
                 
                 <Text style={dynamicStyles.modalLabel}>Phân loại (Dung Tích):</Text>
                 <View style={dynamicStyles.modalSizeRow}>
-                  {product.sizes?.map((size: string) => (
-                    <Pressable 
-                      key={size} 
-                      style={[dynamicStyles.modalSizeBtn, tempSize === size && dynamicStyles.modalSizeBtnActive]} 
-                      onPress={() => setTempSize(size)}
-                    >
-                      <Text style={[dynamicStyles.modalSizeText, tempSize === size && dynamicStyles.modalSizeTextActive]}>{size}</Text>
-                    </Pressable>
-                  ))}
+                  {product.sizes?.map((variant: ProductVariant) => {
+                    const isSelected = tempVariant?.size === variant.size;
+                    return (
+                      <Pressable 
+                        key={variant.size} 
+                        style={[dynamicStyles.modalSizeBtn, isSelected && dynamicStyles.modalSizeBtnActive]} 
+                        onPress={() => setTempVariant(variant)}
+                      >
+                        <Text style={[dynamicStyles.modalSizeText, isSelected && dynamicStyles.modalSizeTextActive]}>
+                          {variant.size}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
                 
                 <View style={dynamicStyles.modalQtyRow}>
@@ -316,7 +359,9 @@ const getStyles = (theme: any) => StyleSheet.create({
   selectedSizeText: { fontSize: 12, fontWeight: '700', color: theme.primary },
   sizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 13 },
   sizeButton: { minWidth: 76, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 15, paddingVertical: 12, borderRadius: 12, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
+  sizeButtonActive: { borderColor: theme.primary, backgroundColor: theme.isDark ? '#442A32' : '#FCE6EE' },
   sizeText: { fontSize: 13, fontWeight: '700', color: theme.textMuted },
+  sizeTextActive: { color: theme.primary, fontWeight: '900' },
   aiCard: { marginTop: 22, padding: 15, borderRadius: 18, backgroundColor: theme.isDark ? '#2A2A2A' : '#F5E8DF', flexDirection: 'row', alignItems: 'center', gap: 12 },
   aiIcon: { width: 43, height: 43, borderRadius: 15, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' },
   aiTextContainer: { flex: 1 },
