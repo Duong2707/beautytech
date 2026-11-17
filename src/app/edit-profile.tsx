@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, Pressable, TextInput, Alert, ActivityIndicator,
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-// 👇 1. Import thư viện vừa cài
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 import api from '../data/datasources/remote/api';
@@ -22,6 +21,11 @@ export default function EditProfileScreen() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // 🌟 STATE THÔNG TIN NGÂN HÀNG
+  const [bankName, setBankName] = useState(user?.bankName || '');
+  const [bankAccountNumber, setBankAccountNumber] = useState(user?.bankAccountNumber || '');
+  const [bankAccountName, setBankAccountName] = useState(user?.bankAccountName || '');
   
   const [loading, setLoading] = useState(false);
 
@@ -49,7 +53,11 @@ export default function EditProfileScreen() {
       phone: phone,
       newEmail: isChangingEmail ? newEmail : undefined,
       currentPassword: (isChangingEmail || isChangingPass) ? currentPassword : undefined,
-      newPassword: isChangingPass ? newPassword : undefined
+      newPassword: isChangingPass ? newPassword : undefined,
+      // 🌟 GỬI KÈM THÔNG TIN NGÂN HÀNG
+      bankName: bankName,
+      bankAccountNumber: bankAccountNumber,
+      bankAccountName: bankAccountName
     };
 
     setLoading(true);
@@ -68,7 +76,11 @@ export default function EditProfileScreen() {
           ...user,
           fullName: payload.fullName,
           phone: payload.phone,
-          email: payload.newEmail || user?.email
+          email: payload.newEmail || user?.email,
+          // 🌟 LƯU OFFLINE THÔNG TIN NGÂN HÀNG
+          bankName: payload.bankName,
+          bankAccountNumber: payload.bankAccountNumber,
+          bankAccountName: payload.bankAccountName
         });
         
         showAlert('Lưu ngoại tuyến', 'Đã lưu thay đổi vào máy. Dữ liệu sẽ tự động đồng bộ khi có mạng!', () => router.back());
@@ -103,13 +115,12 @@ export default function EditProfileScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* 👇 2. Thay thế bằng KeyboardAwareScrollView (Tự động xử lý bàn phím cho cả iOS & Android) */}
       <KeyboardAwareScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         enableOnAndroid={true}
         enableAutomaticScroll={true}
-        extraScrollHeight={100} // Đẩy thêm 100px để không bị sát mép bàn phím
+        extraScrollHeight={100}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -127,6 +138,28 @@ export default function EditProfileScreen() {
         <View style={styles.formGroup}>
           <Text style={styles.label}>Số điện thoại</Text>
           <TextInput style={styles.input} value={phone} onChangeText={setPhone} placeholder="Nhập SĐT" placeholderTextColor={theme.textMuted} keyboardType="phone-pad" />
+        </View>
+
+        {/* 🌟 KHU VỰC NHẬP THÔNG TIN NGÂN HÀNG */}
+        <Text style={[styles.label, { marginTop: 15, color: theme.primary }]}>Thông tin ngân hàng (Dùng để hoàn tiền)</Text>
+        <View style={styles.warningBox}>
+          <Ionicons name="information-circle-outline" size={20} color="#4CAF50" />
+          <Text style={[styles.warningText, { color: '#2E7D32' }]}>Cung cấp thông tin để được hoàn tiền nhanh chóng khi có sự cố.</Text>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Tên ngân hàng</Text>
+          <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="Ví dụ: BIDV, Vietcombank, MBBank..." placeholderTextColor={theme.textMuted} />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Số tài khoản</Text>
+          <TextInput style={styles.input} value={bankAccountNumber} onChangeText={setBankAccountNumber} placeholder="Nhập số tài khoản" placeholderTextColor={theme.textMuted} keyboardType="number-pad" />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Tên chủ tài khoản</Text>
+          <TextInput style={styles.input} value={bankAccountName} onChangeText={setBankAccountName} placeholder="Ví dụ: NGUYEN VAN A" placeholderTextColor={theme.textMuted} autoCapitalize="characters" />
         </View>
 
         <Text style={[styles.label, { marginTop: 15, color: theme.primary }]}>Thông tin bảo mật</Text>
@@ -180,7 +213,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   formGroup: { marginBottom: 15 },
   label: { fontSize: 14, fontWeight: '700', color: theme.text, marginBottom: 8 },
   input: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 15, paddingVertical: 14, fontSize: 15, color: theme.text },
-  warningBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF3E0', padding: 12, borderRadius: 10, marginBottom: 15, gap: 8 },
+  warningBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.isDark ? '#1E3320' : '#E8F5E9', padding: 12, borderRadius: 10, marginBottom: 15, gap: 8 },
   warningText: { color: '#E65100', fontSize: 13, flex: 1, lineHeight: 18 },
   saveButton: { backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 15, alignItems: 'center', marginTop: 20 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: '800' },

@@ -12,18 +12,19 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
+  Image, // 🌟 Thêm Image để hiển thị QR
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { fetchOrdersApi, updateOrderStatusApi, confirmRefundApi } from "../../services/orderApi";
 import { useAuth } from "../../presentation/contexts/AuthContext";
-import api from "../../data/datasources/remote/api"; // 🌟 Thêm import api
 
 const PINK = "#E88BA8";
 const DARK = "#30242A";
 const MUTED = "#8E858A";
 const BG = "#FFF8FA";
 
+// 🌟 Cập nhật Type để nhận thông tin ngân hàng từ User
 type Order = {
   _id: string;
   orderId: string;
@@ -38,6 +39,14 @@ type Order = {
   createdAt: string;
   rating?: number;
   comment?: string;
+  userId?: {
+    _id: string;
+    fullName: string;
+    phone: string;
+    bankName?: string;
+    bankAccountNumber?: string;
+    bankAccountName?: string;
+  };
 };
 
 const menuItems = [
@@ -54,7 +63,7 @@ const filters = [
   { label: "Đã xác nhận", value: "confirmed" },
   { label: "Đang giao", value: "shipping" },
   { label: "Đã giao", value: "delivered" },
-  { label: "Chờ hoàn tiền", value: "cancel_requested" }, // 🌟 Thêm bộ lọc
+  { label: "Chờ hoàn tiền", value: "cancel_requested" },
   { label: "Đã hủy", value: "cancelled" },
 ];
 
@@ -66,7 +75,7 @@ const statusInfo: Record<string, { label: string; color: string; background: str
   shipping: { label: "Đang giao", color: "#0D9488", background: "#E0F7F3" },
   delivered: { label: "Đã giao", color: "#15803D", background: "#E5F7E9" },
   reviewed: { label: "Đã đánh giá", color: "#8B5CF6", background: "#F3E8FF" },
-  cancel_requested: { label: "Chờ hoàn tiền", color: "#D99B4D", background: "#FFF4D9" }, // 🌟 Trạng thái mới
+  cancel_requested: { label: "Chờ hoàn tiền", color: "#D99B4D", background: "#FFF4D9" },
   cancelled: { label: "Đã hủy", color: "#DC2626", background: "#FEECEC" },
 };
 
@@ -84,6 +93,10 @@ export default function AdminOrdersScreen() {
   const [filter, setFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [shipperModal, setShipperModal] = useState(false);
+
+  // 🌟 STATE CHO MODAL HOÀN TIỀN
+  const [refundModalVisible, setRefundModalVisible] = useState(false);
+  const [selectedRefundOrder, setSelectedRefundOrder] = useState<Order | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -140,39 +153,52 @@ export default function AdminOrdersScreen() {
     }
   };
 
-  // 🌟 HÀM XỬ LÝ XÁC NHẬN HOÀN TIỀN
-  const handleConfirmRefund = (orderId: string) => {
-    const processRefund = async () => {
-      try {
-        await confirmRefundApi(orderId);
-        if (Platform.OS === 'web') {
-          window.alert("Đã xác nhận hoàn tiền cho khách hàng.");
-        } else {
-          Alert.alert("Thành công", "Đã xác nhận hoàn tiền cho khách hàng.");
-        }
-        loadOrders();
-      } catch (error) {
-        if (Platform.OS === 'web') {
-          window.alert("Không thể xác nhận hoàn tiền.");
-        } else {
-          Alert.alert("Lỗi", "Không thể xác nhận hoàn tiền.");
-        }
-      }
-    };
+  // 🌟 HÀM MỞ MODAL HOÀN TIỀN
+  const openRefundModal = (order: Order) => {
+    if (!order.userId?.bankAccountNumber || !order.userId?.bankName) {
+      Alert.alert("Thiếu thông tin", "Khách hàng này chưa cập nhật thông tin ngân hàng. Vui lòng liên hệ khách hàng để lấy số tài khoản!");
+      return;
+    }
+    setSelectedRefundOrder(order);
+    setRefundModalVisible(true);
+  };
 
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Bạn đã chuyển khoản trả lại tiền cho đơn ${orderId} chưa?`)) {
-        processRefund();
+  // 🌟 HÀM TẠO MÃ QR HOÀN TIỀN
+  const generateRefundQR = (order: Order) => {
+    if (!order.userId?.bankName || !order.userId?.bankAccountNumber) return null;
+    
+    // Map tên ngân hàng sang mã chuẩn của VietQR (nếu khách nhập đúng tên)
+    let bankId = order.userId.bankName.toUpperCase().trim();
+    if (bankId.includes("VIETCOMBANK")) bankId = "vietcombank";
+    else if (bankId.includes("BIDV")) bankId = "bidv";
+    else if (bankId.includes("VIETINBANK")) bankId = "vietinbank";
+    else if (bankId.includes("MB")) bankId = "mbbank";
+    else if (bankId.includes("TECHCOMBANK")) bankId = "techcombank";
+    else if (bankId.includes("ACB")) bankId = "acb";
+    else if (bankId.includes("SACOMBANK")) bankId = "sacombank";
+
+    const accountNo = order.userId.bankAccountNumber;
+    const accountName = order.userId.bankAccountName || order.recipientName;
+    const amount = Math.round(order.total);
+    const addInfo = `Hoan tien don ${order.orderId}`;
+
+    return `https://img.vietqr.io/image/${bankId}-${accountNo}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(addInfo)}&accountName=${encodeURIComponent(accountName)}`;
+  };
+
+  // 🌟 XỬ LÝ KHI ADMIN XÁC NHẬN ĐÃ CHUYỂN KHOẢN
+  const handleConfirmRefund = async () => {
+    if (!selectedRefundOrder) return;
+    try {
+      await confirmRefundApi(selectedRefundOrder.orderId);
+      Alert.alert("Thành công", "Đã xác nhận hoàn tiền cho khách hàng.");
+      setRefundModalVisible(false);
+      loadOrders();
+    } catch (error: any) {
+      let msg = "Không thể xác nhận hoàn tiền.";
+      if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
+        msg = "Cần kết nối Internet để xác nhận hoàn tiền.";
       }
-    } else {
-      Alert.alert(
-        "Xác nhận hoàn tiền",
-        `Bạn đã chuyển khoản trả lại tiền cho đơn ${orderId} chưa?`,
-        [
-          { text: "Chưa", style: "cancel" },
-          { text: "Rồi, hoàn tất", onPress: processRefund }
-        ]
-      );
+      Alert.alert("Lỗi", msg);
     }
   };
 
@@ -226,16 +252,16 @@ export default function AdminOrdersScreen() {
       );
     }
 
-    // 🌟 NÚT XÁC NHẬN HOÀN TIỀN (Dành cho đơn đã thanh toán QR nhưng khách muốn hủy)
+    // 🌟 NÚT MỞ MODAL HOÀN TIỀN
     if (order.orderStatus === "cancel_requested") {
       return (
         <View style={styles.actionRow}>
           <TouchableOpacity 
             style={[styles.confirmButton, { backgroundColor: '#15803D' }]} 
-            onPress={() => handleConfirmRefund(order.orderId)}
+            onPress={() => openRefundModal(order)}
           >
-            <Ionicons name="cash-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.buttonText}>Đã hoàn tiền</Text>
+            <Ionicons name="qr-code-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.buttonText}>Tạo QR hoàn tiền</Text>
           </TouchableOpacity>
         </View>
       );
@@ -443,7 +469,6 @@ export default function AdminOrdersScreen() {
                       </View>
                     </View>
 
-                    {/* 🌟 KHỐI HIỂN THỊ ĐÁNH GIÁ CỦA KHÁCH HÀNG */}
                     {order.orderStatus === 'reviewed' && (
                       <View style={styles.reviewBox}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -478,6 +503,7 @@ export default function AdminOrdersScreen() {
         </ScrollView>
       </View>
 
+      {/* MODAL GIAO SHIPPER */}
       <Modal visible={shipperModal} transparent animationType="fade" onRequestClose={() => setShipperModal(false)}>
         <View style={styles.overlay}>
           <View style={styles.modalCard}>
@@ -509,11 +535,65 @@ export default function AdminOrdersScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* 🌟 MODAL TẠO MÃ QR HOÀN TIỀN */}
+      <Modal visible={refundModalVisible} transparent animationType="fade" onRequestClose={() => setRefundModalVisible(false)}>
+        <View style={styles.overlay}>
+          <View style={[styles.modalCard, { maxWidth: 400 }]}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalIcon, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="qr-code-outline" size={24} color="#15803D" />
+              </View>
+              <TouchableOpacity onPress={() => setRefundModalVisible(false)}>
+                <Ionicons name="close" size={23} color={MUTED} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.modalTitle}>Hoàn tiền cho khách</Text>
+            <Text style={styles.modalSubtitle}>Quét mã QR dưới đây bằng App Ngân hàng để hoàn tiền tự động.</Text>
+
+            {selectedRefundOrder && (
+              <View style={{ alignItems: 'center', marginTop: 10 }}>
+                <View style={{ backgroundColor: '#FFF8FA', padding: 15, borderRadius: 15, width: '100%', marginBottom: 15 }}>
+                  <Text style={{ fontSize: 13, color: MUTED, marginBottom: 5 }}>Thông tin nhận tiền:</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: DARK }}>{selectedRefundOrder.userId?.bankName}</Text>
+                  <Text style={{ fontSize: 14, color: DARK, marginTop: 3 }}>STK: {selectedRefundOrder.userId?.bankAccountNumber}</Text>
+                  <Text style={{ fontSize: 14, color: DARK, marginTop: 3 }}>Tên: {selectedRefundOrder.userId?.bankAccountName}</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#DC2626', marginTop: 10 }}>Số tiền: {formatMoney(selectedRefundOrder.total)}</Text>
+                </View>
+
+                <Image 
+                  source={{ uri: generateRefundQR(selectedRefundOrder) || '' }} 
+                  style={{ width: 250, height: 250 }} 
+                  resizeMode="contain" 
+                />
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.confirmShipButton, { backgroundColor: '#15803D', marginTop: 15 }]}
+              onPress={() => {
+                Alert.alert(
+                  "Xác nhận",
+                  "Bạn đã quét mã và chuyển khoản hoàn tiền thành công?",
+                  [
+                    { text: "Chưa", style: "cancel" },
+                    { text: "Rồi, xác nhận", onPress: handleConfirmRefund }
+                  ]
+                );
+              }}
+            >
+              <Text style={styles.confirmShipText}>Tôi đã chuyển khoản</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // ... (Giữ nguyên toàn bộ styles cũ của bạn) ...
   container: { flex: 1, flexDirection: 'row', backgroundColor: BG },
   sidebar: { width: 250, backgroundColor: '#FFFFFF', paddingHorizontal: 18, paddingTop: 30, paddingBottom: 15, borderRightWidth: 1, borderRightColor: '#F3E9ED' },
   mobileSidebar: { width: 250, height: '100%', elevation: 5 },
