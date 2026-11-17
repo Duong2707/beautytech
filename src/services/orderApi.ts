@@ -103,13 +103,18 @@ export const cancelOrderApi = async (orderId: string) => {
       // 1. Đưa vào hàng đợi
       await addToOfflineQueue('PUT', `/api/orders/${orderId}/cancel`, null);
       
-      // 2. Cập nhật Cache trên máy để UI thấy trạng thái "Đã hủy"
+      // 2. Cập nhật Cache trên máy để UI thấy trạng thái mới
       const cached = await AsyncStorage.getItem(CACHE_KEY_ORDERS);
       if (cached) {
         const list = JSON.parse(cached);
-        const updatedList = list.map((o: any) => 
-          (o.orderId === orderId || o._id === orderId) ? { ...o, orderStatus: 'cancelled' } : o
-        );
+        const updatedList = list.map((o: any) => {
+          if (o.orderId === orderId || o._id === orderId) {
+            // 🌟 Nếu đã thanh toán (paid) thì chuyển thành cancel_requested
+            const isPaid = o.paymentStatus === 'paid';
+            return { ...o, orderStatus: isPaid ? 'cancel_requested' : 'cancelled' };
+          }
+          return o;
+        });
         await AsyncStorage.setItem(CACHE_KEY_ORDERS, JSON.stringify(updatedList));
       }
       
@@ -119,5 +124,29 @@ export const cancelOrderApi = async (orderId: string) => {
     // Các lỗi khác (ví dụ: Server báo không thể hủy vì đơn đã giao)
     console.error('Lỗi cancelOrderApi:', error.response?.data || error.message);
     throw new Error(error.response?.data?.message || "Lỗi hủy đơn hàng");
+  }
+};
+
+// 🌟 ADMIN XÁC NHẬN ĐÃ HOÀN TIỀN
+export const confirmRefundApi = async (orderId: string) => {
+  try {
+    const res = await api.put(`/api/orders/${orderId}/refund`);
+    
+    // Cập nhật lại Cache đề phòng Admin đang xem offline
+    const cached = await AsyncStorage.getItem(CACHE_KEY_ORDERS);
+    if (cached) {
+      const list = JSON.parse(cached);
+      const updatedList = list.map((o: any) => 
+        (o.orderId === orderId || o._id === orderId) 
+          ? { ...o, orderStatus: 'cancelled', paymentStatus: 'refunded' } 
+          : o
+      );
+      await AsyncStorage.setItem(CACHE_KEY_ORDERS, JSON.stringify(updatedList));
+    }
+    
+    return res.data;
+  } catch (error: any) {
+    console.error('Lỗi confirmRefundApi:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.message || "Lỗi xác nhận hoàn tiền");
   }
 };

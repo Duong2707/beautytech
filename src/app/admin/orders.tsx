@@ -15,15 +15,15 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
-import { fetchOrdersApi, updateOrderStatusApi } from "../../services/orderApi";
+import { fetchOrdersApi, updateOrderStatusApi, confirmRefundApi } from "../../services/orderApi";
 import { useAuth } from "../../presentation/contexts/AuthContext";
+import api from "../../data/datasources/remote/api"; // 🌟 Thêm import api
 
 const PINK = "#E88BA8";
 const DARK = "#30242A";
 const MUTED = "#8E858A";
 const BG = "#FFF8FA";
 
-// 🌟 CẬP NHẬT TYPE ĐỂ NHẬN THÊM RATING VÀ COMMENT
 type Order = {
   _id: string;
   orderId: string;
@@ -36,15 +36,14 @@ type Order = {
   paymentMethod: string;
   paymentStatus: string;
   createdAt: string;
-  rating?: number;   // Thêm trường này
-  comment?: string;  // Thêm trường này
+  rating?: number;
+  comment?: string;
 };
 
 const menuItems = [
   { label: "Tổng quan", icon: "grid-outline", route: "/admin" },
   { label: "Sản phẩm", icon: "cube-outline", route: "/admin/products" },
   { label: "Đơn hàng", icon: "receipt-outline", route: "/admin/orders" },
-//  { label: "Shipper", icon: "bicycle-outline", route: "/admin/shippers" },
   { label: "Voucher", icon: "ticket-outline", route: "/admin/vouchers" },
   { label: "Thông báo", icon: "notifications-outline", route: "/admin/notifications" },
 ];
@@ -55,6 +54,7 @@ const filters = [
   { label: "Đã xác nhận", value: "confirmed" },
   { label: "Đang giao", value: "shipping" },
   { label: "Đã giao", value: "delivered" },
+  { label: "Chờ hoàn tiền", value: "cancel_requested" }, // 🌟 Thêm bộ lọc
   { label: "Đã hủy", value: "cancelled" },
 ];
 
@@ -66,6 +66,7 @@ const statusInfo: Record<string, { label: string; color: string; background: str
   shipping: { label: "Đang giao", color: "#0D9488", background: "#E0F7F3" },
   delivered: { label: "Đã giao", color: "#15803D", background: "#E5F7E9" },
   reviewed: { label: "Đã đánh giá", color: "#8B5CF6", background: "#F3E8FF" },
+  cancel_requested: { label: "Chờ hoàn tiền", color: "#D99B4D", background: "#FFF4D9" }, // 🌟 Trạng thái mới
   cancelled: { label: "Đã hủy", color: "#DC2626", background: "#FEECEC" },
 };
 
@@ -139,6 +140,42 @@ export default function AdminOrdersScreen() {
     }
   };
 
+  // 🌟 HÀM XỬ LÝ XÁC NHẬN HOÀN TIỀN
+  const handleConfirmRefund = (orderId: string) => {
+    const processRefund = async () => {
+      try {
+        await confirmRefundApi(orderId);
+        if (Platform.OS === 'web') {
+          window.alert("Đã xác nhận hoàn tiền cho khách hàng.");
+        } else {
+          Alert.alert("Thành công", "Đã xác nhận hoàn tiền cho khách hàng.");
+        }
+        loadOrders();
+      } catch (error) {
+        if (Platform.OS === 'web') {
+          window.alert("Không thể xác nhận hoàn tiền.");
+        } else {
+          Alert.alert("Lỗi", "Không thể xác nhận hoàn tiền.");
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Bạn đã chuyển khoản trả lại tiền cho đơn ${orderId} chưa?`)) {
+        processRefund();
+      }
+    } else {
+      Alert.alert(
+        "Xác nhận hoàn tiền",
+        `Bạn đã chuyển khoản trả lại tiền cho đơn ${orderId} chưa?`,
+        [
+          { text: "Chưa", style: "cancel" },
+          { text: "Rồi, hoàn tất", onPress: processRefund }
+        ]
+      );
+    }
+  };
+
   const confirmOrder = (order: Order) => {
     handleUpdateStatus(order.orderId, "confirmed", `Đã xác nhận đơn ${order.orderId}`);
   };
@@ -184,6 +221,21 @@ export default function AdminOrdersScreen() {
           <TouchableOpacity style={styles.assignButton} onPress={() => handleShipOrder(order)}>
             <Ionicons name="bicycle-outline" size={16} color={PINK} />
             <Text style={styles.assignText}>Giao cho Shipper</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // 🌟 NÚT XÁC NHẬN HOÀN TIỀN (Dành cho đơn đã thanh toán QR nhưng khách muốn hủy)
+    if (order.orderStatus === "cancel_requested") {
+      return (
+        <View style={styles.actionRow}>
+          <TouchableOpacity 
+            style={[styles.confirmButton, { backgroundColor: '#15803D' }]} 
+            onPress={() => handleConfirmRefund(order.orderId)}
+          >
+            <Ionicons name="cash-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.buttonText}>Đã hoàn tiền</Text>
           </TouchableOpacity>
         </View>
       );
@@ -462,7 +514,6 @@ export default function AdminOrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ... (Giữ nguyên toàn bộ style cũ) ...
   container: { flex: 1, flexDirection: 'row', backgroundColor: BG },
   sidebar: { width: 250, backgroundColor: '#FFFFFF', paddingHorizontal: 18, paddingTop: 30, paddingBottom: 15, borderRightWidth: 1, borderRightColor: '#F3E9ED' },
   mobileSidebar: { width: 250, height: '100%', elevation: 5 },
@@ -472,8 +523,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.2)', // Lớp phủ mờ
-    zIndex: 19, // Nằm dưới sidebar (zIndex 20) nhưng trên nội dung chính
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    zIndex: 19, 
   },
   mobileMenuWrapper: { position: 'absolute', zIndex: 20, top: 0, bottom: 0, left: 0 },
   logoArea: { marginBottom: 35, paddingHorizontal: 7 },
@@ -552,10 +603,8 @@ const styles = StyleSheet.create({
   confirmShipText: { color: '#FFF', fontWeight: '700', fontSize: 14 },
   cancelButton: { padding: 12, alignItems: 'center' },
   cancelText: { color: MUTED, fontWeight: '600' },
-
-  // 🌟 STYLE MỚI CHO HỘP ĐÁNH GIÁ
   reviewBox: {
-    backgroundColor: '#F9F5FF', // Màu tím nhạt
+    backgroundColor: '#F9F5FF',
     padding: 12,
     borderRadius: 10,
     marginTop: 15,
@@ -565,7 +614,7 @@ const styles = StyleSheet.create({
   reviewTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#8B5CF6', // Màu tím đậm
+    color: '#8B5CF6',
   },
   reviewComment: {
     fontSize: 12,
