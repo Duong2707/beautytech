@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TextInput, Alert, ActivityIndicator, Platform, Modal, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,24 @@ import api from '../data/datasources/remote/api';
 import { useAuth } from '../presentation/contexts/AuthContext';
 import { useTheme } from '../presentation/contexts/ThemeContext';
 import { addToOfflineQueue } from '../services/offlineSync';
+
+// 🌟 DANH SÁCH CÁC NGÂN HÀNG PHỔ BIẾN (Dùng tên viết tắt chuẩn của VietQR)
+const BANKS = [
+  { id: 'vietcombank', name: 'Vietcombank (VCB)' },
+  { id: 'bidv', name: 'BIDV' },
+  { id: 'vietinbank', name: 'VietinBank (CTG)' },
+  { id: 'mbbank', name: 'MB Bank' },
+  { id: 'techcombank', name: 'Techcombank (TCB)' },
+  { id: 'acb', name: 'ACB' },
+  { id: 'vpbank', name: 'VPBank' },
+  { id: 'tpbank', name: 'TPBank' },
+  { id: 'sacombank', name: 'Sacombank' },
+  { id: 'agribank', name: 'Agribank' },
+  { id: 'vib', name: 'VIB' },
+  { id: 'msb', name: 'MSB' },
+  { id: 'shinhan', name: 'Shinhan Bank' },
+  { id: 'cak', name: 'CAKE by VPBank' },
+];
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -27,12 +45,31 @@ export default function EditProfileScreen() {
   const [bankAccountNumber, setBankAccountNumber] = useState(user?.bankAccountNumber || '');
   const [bankAccountName, setBankAccountName] = useState(user?.bankAccountName || '');
   
+  // 🌟 STATE CHO MODAL CHỌN NGÂN HÀNG
+  const [isBankModalVisible, setIsBankModalVisible] = useState(false);
+  
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
     if (!fullName.trim()) {
       showAlert('Lỗi', 'Họ tên không được để trống');
       return;
+    }
+
+    // 🌟 VALIDATE THÔNG TIN NGÂN HÀNG
+    if (bankAccountNumber.trim() !== '') {
+      if (!/^\d{6,20}$/.test(bankAccountNumber)) {
+        showAlert('Lỗi', 'Số tài khoản không hợp lệ (Chỉ chứa số, từ 6-20 ký tự)');
+        return;
+      }
+      if (!bankName) {
+        showAlert('Lỗi', 'Vui lòng chọn ngân hàng');
+        return;
+      }
+      if (!bankAccountName.trim()) {
+        showAlert('Lỗi', 'Vui lòng nhập tên chủ tài khoản');
+        return;
+      }
     }
 
     if (newPassword && newPassword !== confirmPassword) {
@@ -54,7 +91,6 @@ export default function EditProfileScreen() {
       newEmail: isChangingEmail ? newEmail : undefined,
       currentPassword: (isChangingEmail || isChangingPass) ? currentPassword : undefined,
       newPassword: isChangingPass ? newPassword : undefined,
-      // 🌟 GỬI KÈM THÔNG TIN NGÂN HÀNG
       bankName: bankName,
       bankAccountNumber: bankAccountNumber,
       bankAccountName: bankAccountName
@@ -77,7 +113,6 @@ export default function EditProfileScreen() {
           fullName: payload.fullName,
           phone: payload.phone,
           email: payload.newEmail || user?.email,
-          // 🌟 LƯU OFFLINE THÔNG TIN NGÂN HÀNG
           bankName: payload.bankName,
           bankAccountNumber: payload.bankAccountNumber,
           bankAccountName: payload.bankAccountName
@@ -144,22 +179,45 @@ export default function EditProfileScreen() {
         <Text style={[styles.label, { marginTop: 15, color: theme.primary }]}>Thông tin ngân hàng (Dùng để hoàn tiền)</Text>
         <View style={styles.warningBox}>
           <Ionicons name="information-circle-outline" size={20} color="#4CAF50" />
-          <Text style={[styles.warningText, { color: '#2E7D32' }]}>Cung cấp thông tin để được hoàn tiền nhanh chóng khi có sự cố.</Text>
+          <Text style={[styles.warningText, { color: '#2E7D32' }]}>Cung cấp chính xác để được hoàn tiền nhanh chóng khi có sự cố.</Text>
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Tên ngân hàng</Text>
-          <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="Ví dụ: BIDV, Vietcombank, MBBank..." placeholderTextColor={theme.textMuted} />
+          <Text style={styles.label}>Ngân hàng</Text>
+          {/* 🌟 ĐỔI TEXTINPUT THÀNH NÚT BẤM MỞ MODAL */}
+          <Pressable style={styles.input} onPress={() => setIsBankModalVisible(true)}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: bankName ? theme.text : theme.textMuted, fontSize: 15 }}>
+                {bankName || 'Chọn ngân hàng'}
+              </Text>
+              <Ionicons name="chevron-down" size={20} color={theme.textMuted} />
+            </View>
+          </Pressable>
         </View>
 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Số tài khoản</Text>
-          <TextInput style={styles.input} value={bankAccountNumber} onChangeText={setBankAccountNumber} placeholder="Nhập số tài khoản" placeholderTextColor={theme.textMuted} keyboardType="number-pad" />
+          <TextInput 
+            style={styles.input} 
+            value={bankAccountNumber} 
+            onChangeText={(text) => setBankAccountNumber(text.replace(/\D/g, ''))} // Chỉ cho nhập số
+            placeholder="Nhập số tài khoản" 
+            placeholderTextColor={theme.textMuted} 
+            keyboardType="number-pad" 
+            maxLength={20}
+          />
         </View>
 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Tên chủ tài khoản</Text>
-          <TextInput style={styles.input} value={bankAccountName} onChangeText={setBankAccountName} placeholder="Ví dụ: NGUYEN VAN A" placeholderTextColor={theme.textMuted} autoCapitalize="characters" />
+          <TextInput 
+            style={styles.input} 
+            value={bankAccountName} 
+            onChangeText={(text) => setBankAccountName(text.toUpperCase())} // Tự động viết hoa
+            placeholder="Ví dụ: NGUYEN VAN A" 
+            placeholderTextColor={theme.textMuted} 
+            autoCapitalize="characters" 
+          />
         </View>
 
         <Text style={[styles.label, { marginTop: 15, color: theme.primary }]}>Thông tin bảo mật</Text>
@@ -197,6 +255,37 @@ export default function EditProfileScreen() {
           {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Lưu thay đổi</Text>}
         </Pressable>
       </KeyboardAwareScrollView>
+
+      {/* 🌟 MODAL CHỌN NGÂN HÀNG */}
+      <Modal visible={isBankModalVisible} transparent animationType="slide" onRequestClose={() => setIsBankModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Chọn ngân hàng</Text>
+              <Pressable onPress={() => setIsBankModalVisible(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {BANKS.map((bank) => (
+                <Pressable 
+                  key={bank.id} 
+                  style={[styles.bankItem, bankName === bank.name && styles.bankItemActive]}
+                  onPress={() => {
+                    setBankName(bank.name);
+                    setIsBankModalVisible(false);
+                  }}
+                >
+                  <Text style={[styles.bankName, bankName === bank.name && { color: theme.primary, fontWeight: '700' }]}>
+                    {bank.name}
+                  </Text>
+                  {bankName === bank.name && <Ionicons name="checkmark-circle" size={20} color={theme.primary} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -217,4 +306,13 @@ const getStyles = (theme: any) => StyleSheet.create({
   warningText: { color: '#E65100', fontSize: 13, flex: 1, lineHeight: 18 },
   saveButton: { backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 15, alignItems: 'center', marginTop: 20 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  
+  // Styles cho Modal chọn ngân hàng
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: theme.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40, maxHeight: '80%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: theme.text },
+  bankItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: theme.border },
+  bankItemActive: { backgroundColor: theme.isDark ? '#2A2A2A' : '#FCE6EE', borderRadius: 8, paddingHorizontal: 10 },
+  bankName: { fontSize: 15, color: theme.text },
 });
