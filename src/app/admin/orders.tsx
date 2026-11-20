@@ -197,8 +197,13 @@ export default function AdminOrdersScreen() {
       let msg = "Không thể xác nhận hoàn tiền.";
       if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
         msg = "Cần kết nối Internet để xác nhận hoàn tiền.";
+      }else {
+        // 🌟 Hiển thị chính xác lỗi từ Backend ném về
+        msg = error.message || msg;
       }
       Alert.alert("Lỗi", msg);
+        } finally {
+      // setIsRefunding(false);
     }
   };
 
@@ -570,17 +575,24 @@ export default function AdminOrdersScreen() {
               </View>
             )}
 
-            <TouchableOpacity
+                        <TouchableOpacity
               style={[styles.confirmShipButton, { backgroundColor: '#15803D', marginTop: 15 }]}
               onPress={() => {
-                Alert.alert(
-                  "Xác nhận",
-                  "Bạn đã quét mã và chuyển khoản hoàn tiền thành công?",
-                  [
-                    { text: "Chưa", style: "cancel" },
-                    { text: "Rồi, xác nhận", onPress: handleConfirmRefund }
-                  ]
-                );
+                // 👇 SỬA TẠI ĐÂY: Phân biệt Web và Mobile
+                if (Platform.OS === 'web') {
+                  if (window.confirm("Bạn đã quét mã và chuyển khoản hoàn tiền thành công?")) {
+                    handleConfirmRefund();
+                  }
+                } else {
+                  Alert.alert(
+                    "Xác nhận",
+                    "Bạn đã quét mã và chuyển khoản hoàn tiền thành công?",
+                    [
+                      { text: "Chưa", style: "cancel" },
+                      { text: "Rồi, xác nhận", onPress: handleConfirmRefund }
+                    ]
+                  );
+                }
               }}
             >
               <Text style={styles.confirmShipText}>Tôi đã chuyển khoản</Text>
